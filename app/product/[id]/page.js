@@ -30,6 +30,11 @@ export default function ProductPage({ params }) {
   // Mock additional product data
   const productImages = [
     product.image,
+    product.image,
+    product.image,
+    product.image,
+    product.image,
+    product.image,
     "/placeholder.svg?height=600&width=500",
     "/placeholder.svg?height=600&width=500",
     "/placeholder.svg?height=600&width=500",
