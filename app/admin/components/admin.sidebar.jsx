@@ -38,12 +38,7 @@ export default function AdminSidebar() {
   }
 
   const DesktopSidebar = () => (
-    <motion.aside
-      initial={{ x: -250 }}
-      animate={{ x: 0 }}
-      transition={{ duration: 0.6, ease: "easeOut" }}
-      className="hidden lg:block w-64 bg-white shadow-lg h-screen sticky top-0"
-    >
+    <aside className="hidden lg:block w-64 bg-white shadow-lg h-screen sticky top-0">
       <div className="p-6">
         <div className="flex items-center space-x-2 mb-8">
           <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center">
@@ -53,13 +48,8 @@ export default function AdminSidebar() {
         </div>
 
         <nav className="space-y-2">
-          {menuItems.map((item, index) => (
-            <motion.div
-              key={item.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.1 + 0.3 }}
-            >
+          {menuItems.map((item) => (
+            <div key={item.id}>
               <Link href={item.href}>
                 <Button
                   variant={activeTab === item.id ? "default" : "ghost"}
@@ -74,7 +64,7 @@ export default function AdminSidebar() {
                   {item.label}
                 </Button>
               </Link>
-            </motion.div>
+            </div>
           ))}
         </nav>
 
@@ -87,7 +77,7 @@ export default function AdminSidebar() {
           </Link>
         </div>
       </div>
-    </motion.aside>
+    </aside>
   )
 
   const MobileMenuButton = () => (
