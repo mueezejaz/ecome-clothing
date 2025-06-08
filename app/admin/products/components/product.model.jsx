@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Upload, Save, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -48,6 +48,7 @@ const colorPresets = [
 ]
 
 export default function ProductModal({ isOpen, onClose, product }) {
+  const input = useRef(null)
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -150,7 +151,9 @@ export default function ProductModal({ isOpen, onClose, product }) {
     updateVariant(variantIndex, "size", newSizes)
   }
 
-  const addImageToVariant = (variantIndex) => {
+  const addImageToVariant = (variantIndex,e) => {
+    e.preventDefault()
+    console.log(e.target.files?.[0])
     const variant = formData.variants[variantIndex]
     const newImages = [...(variant.images || []), "/placeholder.svg?height=400&width=300"]
     updateVariant(variantIndex, "images", newImages)
@@ -472,9 +475,12 @@ export default function ProductModal({ isOpen, onClose, product }) {
                                 <div className="space-y-2">
                                   <div className="flex items-center justify-between">
                                     <Label>Variant Images</Label>
+                                    <input ref={input} type="file" onChange={(e) => addImageToVariant(index,e)} className="absolute right-[9999px]"/>
                                     <Button
                                       type="button"
-                                      onClick={() => addImageToVariant(index)}
+                                      onClick={()=>{
+                                          input.current.click();
+                                      }}
                                       variant="outline"
                                       size="sm"
                                     >
