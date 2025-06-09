@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-
+import axiosInstance from "@/app/config/axios"
 const sizeOptions = [
   "XS",
   "S",
@@ -49,6 +49,7 @@ const colorPresets = [
 
 export default function ProductModal({ isOpen, onClose, product }) {
   const input = useRef(null)
+  let inputMetaData = null;
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -151,11 +152,17 @@ export default function ProductModal({ isOpen, onClose, product }) {
     updateVariant(variantIndex, "size", newSizes)
   }
 
-  const addImageToVariant = (variantIndex,e) => {
+  const addImageToVariant = async(variantIndex,e) => {
     e.preventDefault()
+    console.log(variantIndex)
     console.log(e.target.files?.[0])
     const variant = formData.variants[variantIndex]
-    const newImages = [...(variant.images || []), "/placeholder.svg?height=400&width=300"]
+    const formdata = new FormData();
+    formdata.append("file",e.target.files?.[0])
+    const respose = await axiosInstance.post('/upload' ,formdata);
+    console.log(respose);
+    const newImages = [...(variant.images || []),respose.data.imageUrl] 
+
     updateVariant(variantIndex, "images", newImages)
   }
 
@@ -169,6 +176,7 @@ export default function ProductModal({ isOpen, onClose, product }) {
     <AnimatePresence>
       {isOpen && (
         <>
+          <input ref={input} type="file" onChange={(e) => addImageToVariant(inputMetaData,e)} className="absolute right-[9999px]"/>
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -475,10 +483,10 @@ export default function ProductModal({ isOpen, onClose, product }) {
                                 <div className="space-y-2">
                                   <div className="flex items-center justify-between">
                                     <Label>Variant Images</Label>
-                                    <input ref={input} type="file" onChange={(e) => addImageToVariant(index,e)} className="absolute right-[9999px]"/>
                                     <Button
                                       type="button"
                                       onClick={()=>{
+                                          inputMetaData = index;
                                           input.current.click();
                                       }}
                                       variant="outline"
