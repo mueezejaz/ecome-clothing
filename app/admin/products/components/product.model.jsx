@@ -152,16 +152,16 @@ export default function ProductModal({ isOpen, onClose, product }) {
     updateVariant(variantIndex, "size", newSizes)
   }
 
-  const addImageToVariant = async(variantIndex,e) => {
+  const addImageToVariant = async (variantIndex, e) => {
     e.preventDefault()
     console.log(variantIndex)
     console.log(e.target.files?.[0])
     const variant = formData.variants[variantIndex]
     const formdata = new FormData();
-    formdata.append("file",e.target.files?.[0])
-    const respose = await axiosInstance.post('/upload' ,formdata);
+    formdata.append("file", {})
+    const respose = await axiosInstance.post('/upload/image', formdata);
     console.log(respose);
-    const newImages = [...(variant.images || []),respose.data.imageUrl] 
+    const newImages = [...(variant.images || []), respose.data.imageUrl]
 
     updateVariant(variantIndex, "images", newImages)
   }
@@ -176,7 +176,7 @@ export default function ProductModal({ isOpen, onClose, product }) {
     <AnimatePresence>
       {isOpen && (
         <>
-          <input ref={input} type="file" onChange={(e) => addImageToVariant(inputMetaData,e)} className="absolute right-[9999px]"/>
+          <input ref={input} type="file" onChange={(e) => addImageToVariant(inputMetaData, e)} className="absolute right-[9999px]" />
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -485,9 +485,9 @@ export default function ProductModal({ isOpen, onClose, product }) {
                                     <Label>Variant Images</Label>
                                     <Button
                                       type="button"
-                                      onClick={()=>{
-                                          inputMetaData = index;
-                                          input.current.click();
+                                      onClick={() => {
+                                        inputMetaData = index;
+                                        input.current.click();
                                       }}
                                       variant="outline"
                                       size="sm"

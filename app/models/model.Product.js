@@ -17,7 +17,7 @@ const ProductSchema = new mongoose.Schema({
   },
   OriginalPrice: {
     type: Number,
-    required: [true, 'Product orignal price is required'],
+    required: [true, 'Product original price is required'],
     min: [0, 'Price cannot be negative'],
   },
   discountPrice: { // Optional: for sale prices
@@ -49,14 +49,16 @@ const ProductSchema = new mongoose.Schema({
       isAvailable: { type: Boolean, default: true },
     }
   ],
-  mainImageUrl: {
-    type: String,
-    required: [true, 'Main image URL is required'],
-    trim: true,
-  },
+  mainImageUrl:
+  {
+    imageUrl: { type: String, required: true, trim: true },
+    publicId: { type: String, required: true, trim: true },
+    fileName: { type: String, trim: true },
+  }
+  ,
   material: { type: String, trim: true },
-  weight: { type: Number, min: 0 }, // in grams, kg, etc.
-  isActive: { // For soft deletion or hiding products
+  weight: { type: Number, min: 0 },
+  isActive: {
     type: Boolean,
     default: true,
   },
