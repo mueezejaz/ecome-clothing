@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { toast } from "sonner"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -153,17 +154,50 @@ export default function ProductModal({ isOpen, onClose, product }) {
   }
 
   const addImageToVariant = async (variantIndex, e) => {
-    e.preventDefault()
-    console.log(variantIndex)
-    console.log(e.target.files?.[0])
-    const variant = formData.variants[variantIndex]
-    const formdata = new FormData();
-    formdata.append("file", {})
-    const respose = await axiosInstance.post('/upload/image', formdata);
-    console.log(respose);
-    const newImages = [...(variant.images || []), respose.data.imageUrl]
+    e.preventDefault();
 
-    updateVariant(variantIndex, "images", newImages)
+    const file = e.target.files?.[0];
+    const variant = formData.variants[variantIndex];
+
+    if (!file) {
+      toast("Please select an image file", {
+        description: "No file was selected",
+        action: {
+          label: "Try again",
+          onClick: () => e.target.click(),
+        },
+      });
+      return;
+    }
+
+    const formdata = new FormData();
+    formdata.append("file", {});
+
+    try {
+      const response = await axiosInstance.post('/upload/image', formdata, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      toast("Image uploaded successfully!", {
+        description: `File: ${file.name}`,
+      });
+
+      const newImages = [...(variant.images || []), {
+        imageUrl: response.data.imageUrl,
+        publicId: response.data.publicId,
+        fileName: response.data.fileName,
+      }];
+      updateVariant(variantIndex, "images", newImages);
+
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || "Failed to upload image";
+
+      toast(errorMessage, {
+        description: "Please try again or contact support if the problem persists",
+      });
+    }
   }
 
   const removeImageFromVariant = (variantIndex, imageIndex) => {
@@ -500,7 +534,7 @@ export default function ProductModal({ isOpen, onClose, product }) {
                                     {variant.images?.map((image, imageIndex) => (
                                       <div key={imageIndex} className="relative group">
                                         <img
-                                          src={image || "/placeholder.svg"}
+                                          src={image.imageUrl || "/placeholder.svg"}
                                           alt={`Variant ${index + 1} Image ${imageIndex + 1}`}
                                           className="w-full h-16 object-cover rounded border"
                                         />

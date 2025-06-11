@@ -22,7 +22,7 @@ const handleRouteError = (handler) => async (request, context) => {
         } else {
             console.error("Unexpected server error:", err);
         }
-        console.log("data is sending");
+        console.log("data is sending", err);
         // Return a JSON response with the error details
         return NextResponse.json(
             {

@@ -19,8 +19,22 @@ export let POST = handleRouteError(async (req) => {
   const formData = await req.formData();
   const file = formData.get('file');
 
-  if (!file || typeof file === 'string') {
-    throw new ApiError(400, "No image file was received.");
+  if (!file) {
+    throw new ApiError(400, "No file was provided in the request.");
+  }
+
+  if (typeof file === 'string') {
+    throw new ApiError(400, "Invalid file format received.");
+  }
+
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  if (!allowedTypes.includes(file.type)) {
+    throw new ApiError(400, `Invalid file type. Allowed types: ${allowedTypes.join(', ')}`);
+  }
+
+  const maxSize = 5 * 1024 * 1024;
+  if (file.size > maxSize) {
+    throw new ApiError(400, "File size exceeds 5MB limit.");
   }
 
   const arrayBuffer = await file.arrayBuffer();
