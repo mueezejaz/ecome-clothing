@@ -49,7 +49,7 @@ const ProductSchema = new mongoose.Schema({
       isAvailable: { type: Boolean, default: true },
     }
   ],
-  mainImageUrl:
+  mainImage:
   {
     imageUrl: { type: String, required: true, trim: true },
     publicId: { type: String, required: true, trim: true },

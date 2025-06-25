@@ -58,7 +58,7 @@ export default function ProductModal({ isOpen, onClose, product }) {
     OriginalPrice: "",
     discountPrice: "",
     category: "",
-    mainImageUrl: "/placeholder.svg?height=400&width=300",
+    mainImage: {},
     material: "",
     weight: "",
     isActive: true,
@@ -76,7 +76,7 @@ export default function ProductModal({ isOpen, onClose, product }) {
         OriginalPrice: product.OriginalPrice?.toString() || "",
         discountPrice: product.discountPrice?.toString() || "",
         category: product.category || "",
-        mainImageUrl: product.mainImageUrl || "/placeholder.svg?height=400&width=300",
+        mainImage: product.mainImage || {},
         material: product.material || "",
         weight: product.weight?.toString() || "",
         isActive: product.isActive !== undefined ? product.isActive : true,
@@ -92,7 +92,7 @@ export default function ProductModal({ isOpen, onClose, product }) {
         OriginalPrice: "",
         discountPrice: "",
         category: "",
-        mainImageUrl: "/placeholder.svg?height=400&width=300",
+        mainImage: {},
         material: "",
         weight: "",
         isActive: true,
@@ -171,7 +171,7 @@ export default function ProductModal({ isOpen, onClose, product }) {
     }
 
     const formdata = new FormData();
-    formdata.append("file", {});
+    formdata.append("file", file);
 
     try {
       const response = await axiosInstance.post('/upload/image', formdata, {
@@ -199,7 +199,45 @@ export default function ProductModal({ isOpen, onClose, product }) {
       });
     }
   }
+  async function addMainImage (e){
+    e.preventDefault();
+    const file = e.target.files?.[0];
+    if (!file) {
+      toast("Please select an image file", {
+        description: "No file was selected",
+        action: {
+          label: "Try again",
+          onClick: () => e.target.click(),
+        },
+      });
+      return;
+    }
 
+    const formdata = new FormData();
+    formdata.append("file", file);
+
+    try {
+      const response = await axiosInstance.post('/upload/image', formdata, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      handleInputChange("mainImage",{
+        imageUrl: response.data.imageUrl,
+        publicId: response.data.publicId,
+        fileName: response.data.fileName,
+      })
+      toast("Image uploaded successfully!", {
+        description: `File: ${file.name}`,
+      });
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || "Failed to upload image";
+
+      toast(errorMessage, {
+        description: "Please try again or contact support if the problem persists",
+      });
+    }
+  }
   const removeImageFromVariant = (variantIndex, imageIndex) => {
     const variant = formData.variants[variantIndex]
     const newImages = variant.images.filter((_, i) => i !== imageIndex)
@@ -210,7 +248,7 @@ export default function ProductModal({ isOpen, onClose, product }) {
     <AnimatePresence>
       {isOpen && (
         <>
-          <input ref={input} type="file" onChange={(e) => addImageToVariant(inputMetaData, e)} className="absolute right-[9999px]" />
+          <input ref={input} type="file" onChange={(e) => { inputMetaData === 'm' ? addMainImage(e) : addImageToVariant(inputMetaData, e) }} className="absolute right-[9999px]" />
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -289,11 +327,19 @@ export default function ProductModal({ isOpen, onClose, product }) {
                         <Label>Main Product Image *</Label>
                         <div className="flex items-center space-x-4">
                           <img
-                            src={formData.mainImageUrl || "/placeholder.svg"}
+                            src={formData.mainImage?.imageUrl || "/placeholder.svg"}
                             alt="Product preview"
                             className="w-20 h-20 rounded-lg object-cover border"
                           />
-                          <Button type="button" variant="outline">
+                          <Button
+
+                            onClick={() => {
+                              inputMetaData = 'm';
+                              input.current.click();
+                            }}
+
+                            type="button" variant="outline">
+
                             <Upload className="w-4 h-4 mr-2" />
                             Upload Main Image
                           </Button>
