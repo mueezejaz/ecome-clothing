@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Upload, Save, Plus, Trash2 } from "lucide-react"
+import { X, Upload, Save, Plus, Trash2, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -33,85 +33,139 @@ const sizeOptions = [
   "42",
 ]
 
-const categoryOptions = ["Women", "Men", "Children"]
+const categoryOptions = ["Women", "Men", "Children",] // Expanded example
 
 const colorPresets = [
-  { name: "Black", hex: "#000000" },
-  { name: "White", hex: "#FFFFFF" },
-  { name: "Navy", hex: "#1E3A8A" },
-  { name: "Gray", hex: "#6B7280" },
-  { name: "Red", hex: "#FF0000" },
-  { name: "Blue", hex: "#3B82F6" },
-  { name: "Green", hex: "#10B981" },
-  { name: "Pink", hex: "#FFC0CB" },
-  { name: "Brown", hex: "#8B4513" },
-  { name: "Beige", hex: "#F5F5DC" },
-]
+  { name: "Black", hex: "#000000" }, { name: "White", hex: "#FFFFFF" }, { name: "Navy", hex: "#1E3A8A" },
+  { name: "Gray", hex: "#6B7280" }, { name: "Red", hex: "#FF0000" }, { name: "Blue", hex: "#3B82F6" },
+  { name: "Green", hex: "#10B981" }, { name: "Pink", hex: "#FFC0CB" }, { name: "Brown", hex: "#8B4513" },
+  { name: "Beige", hex: "#F5F5DC" }, { name: "Olive", hex: "#808000" }, { name: "Purple", hex: "#800080" },
+] // Expanded example
 
-export default function ProductModal({ isOpen, onClose, product }) {
-  const input = useRef(null)
-  let inputMetaData = null;
-  const [loading , setLoading ] = useState({
-    loading:false,
-    message: "",
-  }) 
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    price: "",
-    OriginalPrice: "",
-    discountPrice: "",
-    category: "",
-    mainImage: {},
-    material: "",
-    weight: "",
-    isActive: true,
-    featured: false,
-    sale: false,
-    variants: [],
-  })
+const initialFormData = {
+  name: "",
+  description: "",
+  price: "",
+  OriginalPrice: "",
+  discountPrice: "",
+  category: "",
+  mainImage: { imageUrl: "", publicId: "", fileName: "" },
+  material: "",
+  weight: "",
+  isActive: true,
+  // featured: false, // Assuming these are not in current Product model based on schema
+  // sale: false,     // Assuming these are not in current Product model
+  variants: [],
+};
+
+export default function ProductModal({ isOpen, onClose, product, onProductSaved }) {
+  const inputRef = useRef(null); // Renamed for clarity
+  const [imageUploadTarget, setImageUploadTarget] = useState(null); // 'main' or variant index
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [formData, setFormData] = useState(initialFormData);
 
   useEffect(() => {
-    if (product) {
-      setFormData({
-        name: product.name || "",
-        description: product.description || "",
-        price: product.price?.toString() || "",
-        OriginalPrice: product.OriginalPrice?.toString() || "",
-        discountPrice: product.discountPrice?.toString() || "",
-        category: product.category || "",
-        mainImage: product.mainImage || {},
-        material: product.material || "",
-        weight: product.weight?.toString() || "",
-        isActive: product.isActive !== undefined ? product.isActive : true,
-        featured: product.featured || false,
-        sale: product.sale || false,
-        variants: product.variants || [],
-      })
-    } else {
-      setFormData({
-        name: "",
-        description: "",
-        price: "",
-        OriginalPrice: "",
-        discountPrice: "",
-        category: "",
-        mainImage: {},
-        material: "",
-        weight: "",
-        isActive: true,
-        featured: false,
-        sale: false,
-        variants: [],
+    if (isOpen) { // Reset form when modal opens or product changes
+      if (product) {
+        setFormData({
+          name: product.name || "",
+          description: product.description || "",
+          price: product.price?.toString() || "",
+          OriginalPrice: product.OriginalPrice?.toString() || "",
+          discountPrice: product.discountPrice?.toString() || "",
+          category: product.category || "",
+          mainImage: product.mainImage || { imageUrl: "", publicId: "", fileName: "" },
+          material: product.material || "",
+          weight: product.weight?.toString() || "",
+          isActive: product.isActive !== undefined ? product.isActive : true,
+          // featured: product.featured || false,
+          // sale: product.sale || false,
+          variants: product.variants?.map(v => ({ // Ensure variants have all needed fields
+            ...v,
+            size: v.size || [],
+            images: v.images || [],
+            isAvailable: v.isAvailable !== undefined ? v.isAvailable : true,
+          })) || [],
+        });
+      } else {
+        setFormData(initialFormData);
+      }
+    }
+  }, [product, isOpen]);
+
+  const validateForm = () => {
+    const { name, description, price, OriginalPrice, discountPrice, category, mainImage, variants } = formData;
+    if (!name.trim()) { toast.error("Product name is required."); return false; }
+    if (!description.trim()) { toast.error("Product description is required."); return false; }
+    if (isNaN(parseFloat(price)) || parseFloat(price) <= 0) { toast.error("Valid current price is required."); return false; }
+    if (isNaN(parseFloat(OriginalPrice)) || parseFloat(OriginalPrice) <= 0) { toast.error("Valid original price is required."); return false; }
+    if (isNaN(parseFloat(discountPrice)) || parseFloat(discountPrice) <= 0) { toast.error("Valid Discount price is required."); return false; }
+    if (parseFloat(price) < parseFloat(discountPrice)) { toast.error("discount price can not be greater then the price");return false } 
+    if (!category) { toast.error("Category is required."); return false; }
+    if (!mainImage?.imageUrl) { toast.error("Main product image is required."); return false; }
+
+    if (!variants || variants.length === 0) {
+      toast.error("At least one product variant is required.");
+      return false;
+    }
+
+    for (let i = 0; i < variants.length; i++) {
+      const v = variants[i];
+      if (!v.color.trim()) { toast.error(`Color is required for Variant ${i + 1}.`); return false; }
+      if (!v.size || v.size.length === 0) { toast.error(`At least one size is required for Variant ${i + 1}.`); return false; }
+      if (isNaN(parseInt(v.quantity)) || parseInt(v.quantity) < 0) { toast.error(`Valid quantity is required for Variant ${i + 1}.`); return false; }
+      if (!v.images || v.images.length === 0) { toast.error(`At least one image is required for Variant ${i + 1}.`); return false; }
+      v.images.forEach(img => {
+        if(!img.imageUrl) {toast.error(`Image URL is missing for an image in Variant ${i+1}.`); return false;}
       })
     }
-  }, [product])
+    return true;
+  };
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    console.log("Form submitted:", formData)
-    onClose()
-  }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    setIsSubmitting(true);
+
+    const payload = {
+      ...formData,
+      price: parseFloat(formData.price),
+      OriginalPrice: parseFloat(formData.OriginalPrice),
+      discountPrice: formData.discountPrice ? parseFloat(formData.discountPrice) : null,
+      weight: formData.weight ? parseFloat(formData.weight) : null,
+      variants: formData.variants.map(v => ({
+        ...v,
+        quantity: parseInt(v.quantity)
+      }))
+    };
+
+    try {
+      let response;
+      if (product && product._id) { // Editing existing product
+        response = await axiosInstance.put(`/api/products/${product._id}`, payload);
+      } else { // Creating new product
+        response = await axiosInstance.post("/api/products", payload);
+      }
+
+      // Axios wraps the response in a `data` object.
+      const result = response.data;
+
+      toast.success(result.message || (product ? "Product updated successfully!" : "Product created successfully!"));
+      if (onProductSaved) {
+        onProductSaved();
+      }
+      onClose(); // Close modal on success
+    } catch (error) {
+      console.error("Submit error:", error);
+      const errorMessage = error.response?.data?.message || error.message || "An unexpected error occurred.";
+      toast.error(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({
@@ -126,7 +180,7 @@ export default function ProductModal({ isOpen, onClose, product }) {
       colorHex: "#000000",
       size: [],
       quantity: 0,
-      images: ["/placeholder.svg?height=400&width=300"],
+      images: [], // Initialize with empty array, actual image objects will be added on upload
       isAvailable: true,
     }
     setFormData((prev) => ({
@@ -161,123 +215,89 @@ export default function ProductModal({ isOpen, onClose, product }) {
         description: msg, 
       });
   }  
-  const addImageToVariant = async (variantIndex, e) => {
-    e.preventDefault();
-    if(loading.loading){
-      showLoadingMessage()
+  const handleImageUpload = async (e) => {
+    if (isUploading) {
+      toast.info("An image upload is already in progress.");
       return;
     }
-    setLoading(e =>({loading:true,message:`pls wait uplading the image of variant number ${variantIndex}`}))
     const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    const toastId = toast.loading(`Uploading ${file.name}...`);
+
+    const imageFormData = new FormData();
+    imageFormData.append("file", file);
+
+    try {
+      const response = await axiosInstance.post('/api/upload/image', imageFormData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      // Axios puts response data directly in `response.data`
+      const result = response.data; 
+
+      toast.success(`Image "${result.fileName}" uploaded successfully!`, { id: toastId });
+
+      const newImageData = {
+        imageUrl: result.imageUrl,
+        publicId: result.publicId,
+        fileName: result.fileName,
+      };
+
+      if (imageUploadTarget === "main") {
+        handleInputChange("mainImage", newImageData);
+      } else if (typeof imageUploadTarget === "number") { // Variant image
+        const variantIndex = imageUploadTarget;
+        const variant = formData.variants[variantIndex];
+        const updatedImages = [...(variant.images || []), newImageData];
+        const finalImages = updatedImages.filter(img => typeof img === 'object' && img.imageUrl);
+        updateVariant(variantIndex, "images", finalImages);
+      }
+    } catch (error) {
+      console.error("Image upload error:", error);
+      const errorMessage = error.response?.data?.message || error.message || "Failed to upload image.";
+      toast.error(errorMessage, { id: toastId });
+    } finally {
+      setIsUploading(false);
+      if (inputRef.current) {
+        inputRef.current.value = ""; // Reset file input
+      }
+      setImageUploadTarget(null); // Reset target
+    }
+  };
+
+  const triggerImageUpload = (targetType) => { // targetType can be 'main' or variant index
+    setImageUploadTarget(targetType);
+    inputRef.current?.click();
+  };
+  
+  const removeImageFromVariant = (variantIndex, imagePublicIdToRemove) => {
     const variant = formData.variants[variantIndex];
+    const newImages = variant.images.filter((img) => img.publicId !== imagePublicIdToRemove);
+    updateVariant(variantIndex, "images", newImages);
+    toast.info("Image removed from variant. Save product to persist changes.");
+  };
 
-    if (!file) {
-      toast("Please select an image file", {
-        description: "No file was selected",
-        action: {
-          label: "Try again",
-          onClick: () => e.target.click(),
-        },
-      });
-      return;
-    }
+  const removeMainImage = () => {
+    handleInputChange("mainImage", { imageUrl: "", publicId: "", fileName: "" });
+    toast.info("Main image removed. Save product to persist changes.");
+  };
 
-    const formdata = new FormData();
-    formdata.append("file", file);
-
-    try {
-      showLoadingMessage("uploading the image pls wait")
-      const response = await axiosInstance.post('/upload/image', formdata, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      toast("Image uploaded successfully!", {
-        description: `File: ${file.name}`,
-      });
-
-      const newImages = [...(variant.images || []), {
-        imageUrl: response.data.imageUrl,
-        publicId: response.data.publicId,
-        fileName: response.data.fileName,
-      }];
-      updateVariant(variantIndex, "images", newImages);
-
-    } catch (error) {
-      const errorMessage = error.response?.data?.message || "Failed to upload image";
-
-      toast(errorMessage, {
-        description: "Please try again or contact support if the problem persists",
-      });
-    } finally {
-      setLoading(e => ({loading:false , message:""}))
-      if (input.current) {
-        input.current.value = "";
-      }
-    }
-  }
-  async function addMainImage(e) {
-    if(loading.loading){
-      showLoadingMessage()
-      return;
-    }
-    setLoading(e => ({loading:true , message: "pls wait uploading the main image"})) 
-    e.preventDefault();
-    const file = e.target.files?.[0];
-    if (!file) {
-      toast("Please select an image file", {
-        description: "No file was selected",
-        action: {
-          label: "Try again",
-          onClick: () => e.target.click(),
-        },
-      });
-      return;
-    }
-
-    const formdata = new FormData();
-    formdata.append("file", file);
-
-    try {
-      showLoadingMessage("uploading the image pls wait")
-      const response = await axiosInstance.post('/upload/image', formdata, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      handleInputChange("mainImage", {
-        imageUrl: response.data.imageUrl,
-        publicId: response.data.publicId,
-        fileName: response.data.fileName,
-      })
-      toast("Image uploaded successfully!", {
-        description: `File: ${file.name}`,
-      });
-    } catch (error) {
-      const errorMessage = error.response?.data?.message || "Failed to upload image";
-
-      toast(errorMessage, {
-        description: "Please try again or contact support if the problem persists",
-      });
-    } finally {
-      setLoading(e => ({loading:false , message:""}))
-      if (input.current) {
-        input.current.value = "";
-      }
-    }
-  }
-  const removeImageFromVariant = (variantIndex, imageIndex) => {
-    const variant = formData.variants[variantIndex]
-    const newImages = variant.images.filter((_, i) => i !== imageIndex)
-    updateVariant(variantIndex, "images", newImages)
-  }
 
   return (
     <AnimatePresence>
       {isOpen && (
         <>
-          <input ref={input} type="file" onChange={(e) => { inputMetaData === 'm' ? addMainImage(e) : addImageToVariant(inputMetaData, e) }} className="absolute right-[9999px]" />
+          <input 
+            ref={inputRef} 
+            type="file" 
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            onChange={handleImageUpload} 
+            className="absolute right-[9999px]" // Visually hidden but accessible
+          />
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -294,397 +314,424 @@ export default function ProductModal({ isOpen, onClose, product }) {
             <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>{product ? "Edit Product" : "Add New Product"}</CardTitle>
-                <Button variant="ghost" size="icon" onClick={onClose}>
+                <Button variant="ghost" size="icon" onClick={onClose} disabled={isSubmitting || isUploading}>
                   <X className="w-4 h-4" />
                 </Button>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-8">
                   {/* Basic Product Information */}
+                  <fieldset disabled={isSubmitting || isUploading} className="space-y-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg">Basic Information</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {/* Product Name */}
+                        <div className="space-y-2">
+                          <Label htmlFor="name">Product Name *</Label>
+                          <Input
+                            id="name"
+                            value={formData.name}
+                            onChange={(e) => handleInputChange("name", e.target.value)}
+                            placeholder="Enter product name"
+                            required
+                          />
+                        </div>
+
+                        {/* Description */}
+                        <div className="space-y-2">
+                          <Label htmlFor="description">Description *</Label>
+                          <Textarea
+                            id="description"
+                            value={formData.description}
+                            onChange={(e) => handleInputChange("description", e.target.value)}
+                            placeholder="Enter detailed product description"
+                            rows={4}
+                            required
+                          />
+                        </div>
+
+                        {/* Category */}
+                        <div className="space-y-2">
+                          <Label>Category *</Label>
+                          <Select
+                            defaultValue = {formData.category}
+                            onValueChange={(value) => handleInputChange("category", value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {categoryOptions.map((category) => (
+                                <SelectItem key={category} value={category}>
+                                  {category}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {/* Main Image upload is handled outside this fieldset for separate disable logic */}
+                      </CardContent>
+                    </Card>
+                  </fieldset>
+
+                  {/* Main Image - separate because its button has its own isUploading logic */}
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-lg">Basic Information</CardTitle>
+                      <CardTitle className="text-lg">Main Image</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                      {/* Product Name */}
-                      <div className="space-y-2">
-                        <Label htmlFor="name">Product Name *</Label>
-                        <Input
-                          id="name"
-                          value={formData.name}
-                          onChange={(e) => handleInputChange("name", e.target.value)}
-                          placeholder="Enter product name"
-                          required
-                        />
-                      </div>
-
-                      {/* Description */}
-                      <div className="space-y-2">
-                        <Label htmlFor="description">Description *</Label>
-                        <Textarea
-                          id="description"
-                          value={formData.description}
-                          onChange={(e) => handleInputChange("description", e.target.value)}
-                          placeholder="Enter detailed product description"
-                          rows={4}
-                          required
-                        />
-                      </div>
-
-                      {/* Category */}
-                      <div className="space-y-2">
-                        <Label>Category *</Label>
-                        <Select
-                          value={formData.category}
-                          onValueChange={(value) => handleInputChange("category", value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {categoryOptions.map((category) => (
-                              <SelectItem key={category} value={category}>
-                                {category}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
+                    <CardContent>
                       {/* Main Image */}
                       <div className="space-y-2">
                         <Label>Main Product Image *</Label>
                         <div className="flex items-center space-x-4">
-                          <img
-                            src={formData.mainImage?.imageUrl || "/placeholder.svg"}
-                            alt="Product preview"
-                            className="w-20 h-20 rounded-lg object-cover border"
-                          />
+                          {formData.mainImage?.imageUrl ? (
+                             <div className="relative group">
+                                <img
+                                  src={formData.mainImage.imageUrl}
+                                  alt="Product preview"
+                                  className="w-20 h-20 rounded-lg object-cover border"
+                                />
+                              </div>
+                          ) : (
+                            <div className="w-20 h-20 rounded-lg border bg-gray-100 flex items-center justify-center">
+                                <Upload className="w-8 h-8 text-gray-400" />
+                            </div>
+                          )}
                           <Button
-
-                            onClick={() => {
-                              inputMetaData = 'm';
-                              input.current.click();
-                            }}
-
-                            type="button" variant="outline">
-
-                            <Upload className="w-4 h-4 mr-2" />
-                            Upload Main Image
+                            type="button"
+                            variant="outline"
+                            onClick={() => triggerImageUpload("main")}
+                            disabled={isUploading || isSubmitting}
+                          >
+                            {isUploading && imageUploadTarget === "main" ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                                <Upload className="w-4 h-4 mr-2" />
+                            )}
+                            {formData.mainImage?.imageUrl ? "Change Image" : "Upload Image"}
                           </Button>
                         </div>
+                        {!formData.mainImage?.imageUrl && <p className="text-xs text-red-500 pt-1">Main image is required.</p>}
                       </div>
                     </CardContent>
                   </Card>
+                  
+                  <fieldset disabled={isSubmitting || isUploading}>
+                    {/* Pricing */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg">Pricing</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="OriginalPrice">Original Price ($) *</Label>
+                            <Input
+                              id="OriginalPrice"
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              value={formData.OriginalPrice}
+                              onChange={(e) => handleInputChange("OriginalPrice", e.target.value)}
+                              placeholder="e.g., 29.99"
+                              required
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="price">Current Price ($) *</Label>
+                            <Input
+                              id="price"
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              value={formData.price}
+                              onChange={(e) => handleInputChange("price", e.target.value)}
+                              placeholder="e.g., 19.99"
+                              required
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="discountPrice">Discount Price ($)</Label>
+                            <Input
+                              id="discountPrice"
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={formData.discountPrice}
+                              onChange={(e) => handleInputChange("discountPrice", e.target.value)}
+                              placeholder="e.g., 14.99 (optional)"
+                            />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
 
-                  {/* Pricing */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">Pricing</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="OriginalPrice">Original Price ($) *</Label>
-                          <Input
-                            id="OriginalPrice"
-                            type="number"
-                            step="0.01"
-                            value={formData.OriginalPrice}
-                            onChange={(e) => handleInputChange("OriginalPrice", e.target.value)}
-                            placeholder="0.00"
-                            required
-                          />
+                    {/* Product Details */}
+                    <Card className="mt-8">
+                      <CardHeader>
+                        <CardTitle className="text-lg">Product Details</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="material">Material</Label>
+                            <Input
+                              id="material"
+                              value={formData.material}
+                              onChange={(e) => handleInputChange("material", e.target.value)}
+                              placeholder="e.g., 100% Cotton"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="weight">Weight (grams)</Label>
+                            <Input
+                              id="weight"
+                              type="number"
+                              value={formData.weight}
+                              onChange={(e) => handleInputChange("weight", e.target.value)}
+                              placeholder="0"
+                            />
+                          </div>
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="price">Current Price ($) *</Label>
-                          <Input
-                            id="price"
-                            type="number"
-                            step="0.01"
-                            value={formData.price}
-                            onChange={(e) => handleInputChange("price", e.target.value)}
-                            placeholder="0.00"
-                            required
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="discountPrice">Discount Price ($)</Label>
-                          <Input
-                            id="discountPrice"
-                            type="number"
-                            step="0.01"
-                            value={formData.discountPrice}
-                            onChange={(e) => handleInputChange("discountPrice", e.target.value)}
-                            placeholder="0.00"
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      </CardContent>
+                    </Card>
 
-                  {/* Product Details */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">Product Details</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="material">Material</Label>
-                          <Input
-                            id="material"
-                            value={formData.material}
-                            onChange={(e) => handleInputChange("material", e.target.value)}
-                            placeholder="e.g., 100% Cotton"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="weight">Weight (grams)</Label>
-                          <Input
-                            id="weight"
-                            type="number"
-                            value={formData.weight}
-                            onChange={(e) => handleInputChange("weight", e.target.value)}
-                            placeholder="0"
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Product Variants */}
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                      <CardTitle className="text-lg">Product Variants</CardTitle>
-                      <Button type="button" onClick={addVariant} variant="outline" size="sm">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Variant
-                      </Button>
-                    </CardHeader>
-                    <CardContent>
-                      {formData.variants.length === 0 ? (
-                        <p className="text-gray-500 text-center py-8">
-                          No variants added yet. Click "Add Variant" to get started.
-                        </p>
-                      ) : (
-                        <div className="space-y-6">
-                          {formData.variants.map((variant, index) => (
-                            <Card key={index} className="border-2">
-                              <CardHeader className="flex flex-row items-center justify-between pb-3">
-                                <CardTitle className="text-base">Variant {index + 1}</CardTitle>
-                                <Button
-                                  type="button"
-                                  onClick={() => removeVariant(index)}
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-red-600 hover:text-red-700"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </CardHeader>
-                              <CardContent className="space-y-4">
-                                {/* Color Selection */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div className="space-y-2">
-                                    <Label>Color Name</Label>
-                                    <Select
-                                      value={variant.color}
-                                      onValueChange={(value) => {
-                                        const selectedColor = colorPresets.find((c) => c.name === value)
-                                        updateVariant(index, "color", value)
-                                        if (selectedColor) {
-                                          updateVariant(index, "colorHex", selectedColor.hex)
-                                        }
-                                      }}
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Select color" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {colorPresets.map((color) => (
-                                          <SelectItem key={color.name} value={color.name}>
-                                            <div className="flex items-center space-x-2">
-                                              <div
-                                                className="w-4 h-4 rounded-full border"
-                                                style={{ backgroundColor: color.hex }}
-                                              />
-                                              <span>{color.name}</span>
-                                            </div>
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label>Color Hex</Label>
-                                    <div className="flex items-center space-x-2">
-                                      <Input
-                                        value={variant.colorHex}
-                                        onChange={(e) => updateVariant(index, "colorHex", e.target.value)}
-                                        placeholder="#000000"
-                                      />
-                                      <div
-                                        className="w-10 h-10 rounded border"
-                                        style={{ backgroundColor: variant.colorHex }}
-                                      />
+                    {/* Product Variants */}
+                    <Card className="mt-8">
+                      <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="text-lg">Product Variants</CardTitle>
+                        <Button type="button" onClick={addVariant} variant="outline" size="sm" disabled={isSubmitting || isUploading}>
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Variant
+                        </Button>
+                      </CardHeader>
+                      <CardContent>
+                        {formData.variants.length === 0 ? (
+                          <p className="text-gray-500 text-center py-8">
+                            No variants added yet. Click "Add Variant" to get started.
+                          </p>
+                        ) : (
+                          <div className="space-y-6">
+                            {formData.variants.map((variant, index) => (
+                              <Card key={index} className="border-2">
+                                <CardHeader className="flex flex-row items-center justify-between pb-3">
+                                  <CardTitle className="text-base">Variant {index + 1}</CardTitle>
+                                  <Button
+                                    type="button"
+                                    onClick={() => removeVariant(index)}
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-red-600 hover:text-red-700"
+                                    disabled={isSubmitting || isUploading}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                  {/* Color Selection */}
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                      <Label>Color Name</Label>
+                                      <Select
+                                        value={variant.color}
+                                        onValueChange={(value) => {
+                                          const selectedColor = colorPresets.find((c) => c.name === value)
+                                          updateVariant(index, "color", value)
+                                          if (selectedColor) {
+                                            updateVariant(index, "colorHex", selectedColor.hex)
+                                          }
+                                        }}
+                                        disabled={isSubmitting || isUploading}
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select color" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {colorPresets.map((color) => (
+                                            <SelectItem key={color.name} value={color.name}>
+                                              <div className="flex items-center space-x-2">
+                                                <div
+                                                  className="w-4 h-4 rounded-full border"
+                                                  style={{ backgroundColor: color.hex }}
+                                                />
+                                                <span>{color.name}</span>
+                                              </div>
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label>Color Hex</Label>
+                                      <div className="flex items-center space-x-2">
+                                        <Input
+                                          value={variant.colorHex}
+                                          onChange={(e) => updateVariant(index, "colorHex", e.target.value)}
+                                          placeholder="#000000"
+                                          disabled={isSubmitting || isUploading}
+                                        />
+                                        <div
+                                          className="w-10 h-10 rounded border"
+                                          style={{ backgroundColor: variant.colorHex }}
+                                        />
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
 
-                                {/* Size Selection */}
-                                <div className="space-y-2">
-                                  <Label>Available Sizes</Label>
-                                  <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-                                    {sizeOptions.map((size) => (
-                                      <Button
-                                        key={size}
-                                        type="button"
-                                        variant={variant.size?.includes(size) ? "default" : "outline"}
-                                        size="sm"
-                                        onClick={() => toggleSize(index, size)}
-                                        className="text-xs"
-                                      >
-                                        {size}
-                                      </Button>
-                                    ))}
-                                  </div>
-                                  {variant.size?.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 mt-2">
-                                      {variant.size.map((size) => (
-                                        <Badge key={size} variant="secondary">
+                                  {/* Size Selection */}
+                                  <div className="space-y-2">
+                                    <Label>Available Sizes</Label>
+                                    <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+                                      {sizeOptions.map((size) => (
+                                        <Button
+                                          key={size}
+                                          type="button"
+                                          variant={variant.size?.includes(size) ? "default" : "outline"}
+                                          size="sm"
+                                          onClick={() => toggleSize(index, size)}
+                                          className="text-xs"
+                                          disabled={isSubmitting || isUploading}
+                                        >
                                           {size}
-                                        </Badge>
+                                        </Button>
                                       ))}
                                     </div>
-                                  )}
-                                </div>
-
-                                {/* Quantity and Availability */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div className="space-y-2">
-                                    <Label>Quantity in Stock</Label>
-                                    <Input
-                                      type="number"
-                                      value={variant.quantity}
-                                      onChange={(e) =>
-                                        updateVariant(index, "quantity", Number.parseInt(e.target.value) || 0)
-                                      }
-                                      placeholder="0"
-                                      min="0"
-                                    />
+                                    {variant.size?.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-2">
+                                        {variant.size.map((size) => (
+                                          <Badge key={size} variant="secondary">
+                                            {size}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
-                                  <div className="space-y-2">
-                                    <Label>Available</Label>
-                                    <div className="flex items-center space-x-2 pt-2">
-                                      <Switch
-                                        checked={variant.isAvailable}
-                                        onCheckedChange={(checked) => updateVariant(index, "isAvailable", checked)}
+
+                                  {/* Quantity and Availability */}
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                      <Label>Quantity in Stock</Label>
+                                      <Input
+                                        type="number"
+                                        value={variant.quantity}
+                                        onChange={(e) =>
+                                          updateVariant(index, "quantity", Number.parseInt(e.target.value) || 0)
+                                        }
+                                        placeholder="0"
+                                        min="0"
+                                        disabled={isSubmitting || isUploading}
                                       />
-                                      <span className="text-sm text-gray-600">
-                                        {variant.isAvailable ? "Available" : "Unavailable"}
-                                      </span>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label>Available</Label>
+                                      <div className="flex items-center space-x-2 pt-2">
+                                        <Switch
+                                          checked={variant.isAvailable}
+                                          onCheckedChange={(checked) => updateVariant(index, "isAvailable", checked)}
+                                          disabled={isSubmitting || isUploading}
+                                        />
+                                        <span className="text-sm text-gray-600">
+                                          {variant.isAvailable ? "Available" : "Unavailable"}
+                                        </span>
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
 
-                                {/* Variant Images */}
-                                <div className="space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <Label>Variant Images</Label>
-                                    <Button
-                                      type="button"
-                                      onClick={() => {
-                                        inputMetaData = index;
-                                        input.current.click();
-                                      }}
-                                      variant="outline"
-                                      size="sm"
-                                    >
-                                      <Plus className="w-3 h-3 mr-1" />
-                                      Add Image
-                                    </Button>
+                                  {/* Variant Images (upload button handled outside fieldset) */}
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <Label>Variant Images *</Label>
+                                      <Button
+                                        type="button"
+                                        onClick={() => triggerImageUpload(index)}
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={isUploading || isSubmitting}
+                                      >
+                                        {isUploading && imageUploadTarget === index ? (
+                                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                        ) : (
+                                          <Plus className="w-3 h-3 mr-1" />
+                                        )}
+                                        Add Image
+                                      </Button>
+                                    </div>
+                                    {(!variant.images || variant.images.length === 0) && <p className="text-xs text-red-500 pt-1">At least one image is required for each variant.</p>}
+                                    <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+                                      {variant.images?.map((image, imageIndex) => (
+                                         image.imageUrl && ( // Only render if imageUrl exists
+                                          <div key={image.publicId || imageIndex} className="relative group">
+                                            <img
+                                              src={image.imageUrl}
+                                              alt={`Variant ${index + 1} Image ${imageIndex + 1}`}
+                                              className="w-full h-16 object-cover rounded border"
+                                            />
+                                            <Button
+                                              type="button"
+                                              onClick={() => removeImageFromVariant(index, image.publicId)}
+                                              variant="destructive"
+                                              size="sm"
+                                              className="absolute -top-2 -right-2 w-6 h-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                              disabled={isUploading || isSubmitting}
+                                            >
+                                              <X className="w-3 h-3" />
+                                            </Button>
+                                          </div>
+                                        )
+                                      ))}
+                                    </div>
                                   </div>
-                                  <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
-                                    {variant.images?.map((image, imageIndex) => (
-                                      <div key={imageIndex} className="relative group">
-                                        <img
-                                          src={image.imageUrl || "/placeholder.svg"}
-                                          alt={`Variant ${index + 1} Image ${imageIndex + 1}`}
-                                          className="w-full h-16 object-cover rounded border"
-                                        />
-                                        <Button
-                                          type="button"
-                                          onClick={() => removeImageFromVariant(index, imageIndex)}
-                                          variant="destructive"
-                                          size="sm"
-                                          className="absolute -top-2 -right-2 w-6 h-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        >
-                                          <X className="w-3 h-3" />
-                                        </Button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        )}
+                         {formData.variants.length === 0 && <p className="text-xs text-red-500 pt-1">At least one variant is required.</p>}
+                      </CardContent>
+                    </Card>
 
-                  {/* Product Settings */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">Product Settings</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <Label>Active Product</Label>
-                            <p className="text-sm text-gray-600">Product is visible and available for purchase</p>
+                    {/* Product Settings */}
+                    <fieldset disabled={isSubmitting}> {/* Only disable settings on final submission */}
+                      <Card className="mt-8">
+                        <CardHeader>
+                          <CardTitle className="text-lg">Product Settings</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label htmlFor={`isActive-${product?._id}`}>Active Product</Label>
+                                <p className="text-sm text-gray-600">Product is visible and available for purchase</p>
+                              </div>
+                              <Switch
+                                id={`isActive-${product?._id}`}
+                                checked={formData.isActive}
+                                onCheckedChange={(checked) => handleInputChange("isActive", checked)}
+                                // disabled state is inherited from fieldset
+                              />
+                            </div>
+                            {/* Removed Featured and On Sale switches as they are not in the Product Model from model.Product.js */}
                           </div>
-                          <Switch
-                            checked={formData.isActive}
-                            onCheckedChange={(checked) => handleInputChange("isActive", checked)}
-                          />
-                        </div>
-                        <Separator />
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <Label>Featured Product</Label>
-                            <p className="text-sm text-gray-600">Show this product in featured section</p>
-                          </div>
-                          <Switch
-                            checked={formData.featured}
-                            onCheckedChange={(checked) => handleInputChange("featured", checked)}
-                          />
-                        </div>
-                        <Separator />
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <Label>On Sale</Label>
-                            <p className="text-sm text-gray-600">Mark this product as on sale</p>
-                          </div>
-                          <Switch
-                            checked={formData.sale}
-                            onCheckedChange={(checked) => handleInputChange("sale", checked)}
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                        </CardContent>
+                      </Card>
+                    </fieldset>
+                  </fieldset> {/* This closes the main fieldset started after Main Image card */}
+
 
                   {/* Action Buttons */}
                   <div className="flex items-center justify-end space-x-4 pt-6 border-t">
-                    <Button type="button" variant="outline" onClick={onClose}>
+                    <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting || isUploading}>
                       Cancel
                     </Button>
-                    <Button type="submit">
-                      <Save className="w-4 h-4 mr-2" />
-                      {product ? "Update Product" : "Create Product"}
+                    <Button type="submit" disabled={isSubmitting || isUploading}>
+                      {isSubmitting ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4 mr-2" />
+                      )}
+                      {product?._id ? "Update Product" : "Create Product"}
                     </Button>
                   </div>
                 </form>
@@ -696,3 +743,5 @@ export default function ProductModal({ isOpen, onClose, product }) {
     </AnimatePresence>
   )
 }
+
+
