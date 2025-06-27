@@ -15,8 +15,7 @@ export default function ProductsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [searchTerm, setSearchTerm] = useState("")
-
-  const filteredProducts = products.filter(
+const filteredProducts = products.filter(
     (product) =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -267,7 +266,12 @@ export default function ProductsPage() {
         </main>
       </div>
 
-      <ProductModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} product={selectedProduct} />
+<ProductModal
+  key={selectedProduct?.id || "new-product"}
+  isOpen={isModalOpen}
+  onClose={() => setIsModalOpen(false)}
+  product={selectedProduct}
+/>
     </div>
   )
 }

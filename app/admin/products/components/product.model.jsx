@@ -51,6 +51,10 @@ const colorPresets = [
 export default function ProductModal({ isOpen, onClose, product }) {
   const input = useRef(null)
   let inputMetaData = null;
+  const [loading , setLoading ] = useState({
+    loading:false,
+    message: "",
+  }) 
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -152,10 +156,18 @@ export default function ProductModal({ isOpen, onClose, product }) {
 
     updateVariant(variantIndex, "size", newSizes)
   }
-
+  function showLoadingMessage(msg = loading.message){
+      toast("Loading", {
+        description: msg, 
+      });
+  }  
   const addImageToVariant = async (variantIndex, e) => {
     e.preventDefault();
-
+    if(loading.loading){
+      showLoadingMessage()
+      return;
+    }
+    setLoading(e =>({loading:true,message:`pls wait uplading the image of variant number ${variantIndex}`}))
     const file = e.target.files?.[0];
     const variant = formData.variants[variantIndex];
 
@@ -174,6 +186,7 @@ export default function ProductModal({ isOpen, onClose, product }) {
     formdata.append("file", file);
 
     try {
+      showLoadingMessage("uploading the image pls wait")
       const response = await axiosInstance.post('/upload/image', formdata, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -197,9 +210,19 @@ export default function ProductModal({ isOpen, onClose, product }) {
       toast(errorMessage, {
         description: "Please try again or contact support if the problem persists",
       });
+    } finally {
+      setLoading(e => ({loading:false , message:""}))
+      if (input.current) {
+        input.current.value = "";
+      }
     }
   }
-  async function addMainImage (e){
+  async function addMainImage(e) {
+    if(loading.loading){
+      showLoadingMessage()
+      return;
+    }
+    setLoading(e => ({loading:true , message: "pls wait uploading the main image"})) 
     e.preventDefault();
     const file = e.target.files?.[0];
     if (!file) {
@@ -217,12 +240,13 @@ export default function ProductModal({ isOpen, onClose, product }) {
     formdata.append("file", file);
 
     try {
+      showLoadingMessage("uploading the image pls wait")
       const response = await axiosInstance.post('/upload/image', formdata, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
-      handleInputChange("mainImage",{
+      handleInputChange("mainImage", {
         imageUrl: response.data.imageUrl,
         publicId: response.data.publicId,
         fileName: response.data.fileName,
@@ -236,6 +260,11 @@ export default function ProductModal({ isOpen, onClose, product }) {
       toast(errorMessage, {
         description: "Please try again or contact support if the problem persists",
       });
+    } finally {
+      setLoading(e => ({loading:false , message:""}))
+      if (input.current) {
+        input.current.value = "";
+      }
     }
   }
   const removeImageFromVariant = (variantIndex, imageIndex) => {
