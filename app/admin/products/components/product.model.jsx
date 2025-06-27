@@ -101,7 +101,6 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
     if (!description.trim()) { toast.error("Product description is required."); return false; }
     if (isNaN(parseFloat(price)) || parseFloat(price) <= 0) { toast.error("Valid current price is required."); return false; }
     if (isNaN(parseFloat(OriginalPrice)) || parseFloat(OriginalPrice) <= 0) { toast.error("Valid original price is required."); return false; }
-    if (isNaN(parseFloat(discountPrice)) || parseFloat(discountPrice) <= 0) { toast.error("Valid Discount price is required."); return false; }
     if (parseFloat(price) < parseFloat(discountPrice)) { toast.error("discount price can not be greater then the price");return false } 
     if (!category) { toast.error("Category is required."); return false; }
     if (!mainImage?.imageUrl) { toast.error("Main product image is required."); return false; }

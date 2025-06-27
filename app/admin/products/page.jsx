@@ -27,7 +27,6 @@ export default function ProductsPage() {
     setError(null);
     try {
       const response = await axiosInstance.get("/api/products");
-      console.log(response.response.data)
       setProducts(response.data.data)
     } catch (err) {
       const errorMessage = err.response?.data?.message || "Fail to fetch the products";
@@ -55,7 +54,7 @@ export default function ProductsPage() {
   );
 
   const handleEditProduct = (product) => {
-    setSelectedProduct(product) // Product ID here should be _id from MongoDB
+    setSelectedProduct(product) 
     setIsModalOpen(true)
   }
 
@@ -68,18 +67,13 @@ export default function ProductsPage() {
     if (!confirm("Are you sure you want to delete this product?")) return;
 
     try {
-      const response = await fetch(`/api/products/${productId}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to delete product.");
-      }
+      const response = await axiosInstance.delete(`/api/products/${productId}`);
       toast.success("Product deleted successfully!");
       fetchProducts(); // Refresh list
     } catch (err) {
-      console.error("Delete product error:", err);
-      toast.error(`Error deleting product: ${err.message}`);
+      const errorMessage = err.response?.data?.message || "Failed to delete this product";
+      toast.error(`Error deleting products: ${errorMessage}`);
+      console.error("Error while deleteing product:", err);
     }
   };
 

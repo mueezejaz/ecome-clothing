@@ -4,14 +4,6 @@ import Product from "@/app/models/model.Product";
 import ApiError from "@/app/utils/ApiError";
 import handleRouteError from "@/app/utils/handleRouteError";
 import mongoose from "mongoose";
-
-// IMPORTANT: Protect these routes with authentication and authorization!
-// Ensure only authenticated users, and perhaps only those with an 'admin' role,
-// can access these endpoints, especially POST.
-// Example using a hypothetical middleware: import { requireAdminAuth } from "@/app/lib/authMiddleware";
-// export const POST = handleRouteError(requireAdminAuth(async (req) => { ... }));
-import mongoose from "mongoose";
-
 // POST: Create a new product
 export const POST = handleRouteError(async (req) => {
   await dbConnect();
@@ -72,7 +64,7 @@ export const POST = handleRouteError(async (req) => {
 // GET: Fetch all products
 export const GET = handleRouteError(async (req) => {
   await dbConnect();
-
+   console.log("data is get") 
   const products = await Product.find({}).sort({ createdAt: -1 }); // Sort by newest first
 
   return NextResponse.json({

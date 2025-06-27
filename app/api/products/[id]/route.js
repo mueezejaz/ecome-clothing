@@ -4,11 +4,16 @@ import Product from "@/app/models/model.Product";
 import ApiError from "@/app/utils/ApiError";
 import handleRouteError from "@/app/utils/handleRouteError";
 import mongoose from "mongoose";
-
+import { v2 as cloudinary } from 'cloudinary'; // Import Cloudinary SDK
 
 // Helper to validate MongoDB ObjectId
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 // GET: Fetch a single product by ID
 export const GET = handleRouteError(async (req, { params }) => {
   await dbConnect();
@@ -47,7 +52,7 @@ export const PUT = handleRouteError(async (req, { params }) => {
   if (Object.keys(body).length === 0) {
     throw new ApiError(400, "Request body cannot be empty for an update operation.");
   }
-  
+
   // Ensure mainImage and variants structure is validated if present in body
   if (body.mainImage && (!body.mainImage.imageUrl || !body.mainImage.publicId)) {
     throw new ApiError(400, "Main image details (imageUrl, publicId) are required if mainImage is being updated.");
@@ -55,7 +60,7 @@ export const PUT = handleRouteError(async (req, { params }) => {
 
   if (body.variants && Array.isArray(body.variants)) {
     if (body.variants.length === 0) {
-        throw new ApiError(400, "Product variants array cannot be empty if provided for update.");
+      throw new ApiError(400, "Product variants array cannot be empty if provided for update.");
     }
     for (const variant of body.variants) {
       const requiredVariantFields = ['color', 'size', 'quantity', 'images'];
@@ -63,7 +68,7 @@ export const PUT = handleRouteError(async (req, { params }) => {
         // Check if field exists and is not null for existing variants being updated
         // For new variants being added in an update, these would be required
         if (variant.hasOwnProperty(field) && (variant[field] === undefined || variant[field] === null)) {
-           throw new ApiError(400, `Variant ${field.charAt(0).toUpperCase() + field.slice(1)} is required if variant is being updated.`);
+          throw new ApiError(400, `Variant ${field.charAt(0).toUpperCase() + field.slice(1)} is required if variant is being updated.`);
         }
       }
       if (variant.images && (!Array.isArray(variant.images) || variant.images.length === 0)) {
@@ -113,29 +118,31 @@ export const DELETE = handleRouteError(async (req, { params }) => {
   if (!isValidObjectId(id)) {
     throw new ApiError(400, "Invalid product ID format.");
   }
-
+  let imagesPublicId = []
   const product = await Product.findById(id);
   if (!product) {
     throw new ApiError(404, "Product not found.");
   }
-
-  // Note: This only deletes the product record from the database.
-  // Images associated with this product in Cloudinary are NOT deleted here.
-  // Implementing image deletion from Cloudinary would require:
-  // 1. Iterating through product.mainImage and product.variants[...].images
-  // 2. Collecting all publicId values.
-  // 3. Calling Cloudinary's API to delete those images (e.g., cloudinary.uploader.destroy(publicId)).
-  // This is a more complex operation and should be handled carefully, possibly in a separate service or background job.
-
+  imagesPublicId.push(product.mainImage.publicId);
+  product.variants.forEach(el => {
+    el.images.forEach(elm => {
+      if (elm.publicId) {
+        imagesPublicId.push(elm.publicId);
+      }
+    })
+  });
+  cloudinary.api.delete_resources(imagesPublicId, (error, result) => {
+    if (error) {
+      new ApiError(400, 'Error deleting images:');
+    }
+  });
   const deletedProduct = await Product.findByIdAndDelete(id);
-
   if (!deletedProduct) {
-    // This case should ideally be caught by the findById check above, but as a safeguard:
     throw new ApiError(404, "Product not found or couldn't be deleted.");
   }
 
   return NextResponse.json({
     message: "Product deleted successfully!",
-    data: { id: deletedProduct._id }, // Return the ID of the deleted product
-  }, { status: 200 }); // Or 204 No Content, but returning ID can be useful for UI
+    data: { id: deletedProduct._id },
+  }, { status: 200 });
 });
