@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { ArrowLeft, Heart, ShoppingBag, Star, Truck, Shield, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -15,7 +15,7 @@ import { notFound } from "next/navigation"
 
 export default function ProductPage({ params }) {
   const [selectedSize, setSelectedSize] = useState("")
-  const [selectedColor, setSelectedColor] = useState("")
+  const [selectedVariant, setSelectedVariant] = useState(null)
   const [selectedImage, setSelectedImage] = useState(0)
   const [quantity, setQuantity] = useState(1)
 
@@ -27,26 +27,59 @@ export default function ProductPage({ params }) {
     notFound()
   }
 
-  // Mock additional product data
-  const productImages = [
-    product.image,
-    product.image,
-    product.image,
-    product.image,
-    product.image,
-    product.image,
-    "/placeholder.svg?height=600&width=500",
-    "/placeholder.svg?height=600&width=500",
-    "/placeholder.svg?height=600&width=500",
-  ]
+  // Initialize with first variant
+  useEffect(() => {
+    if (product.variants && product.variants.length > 0 && !selectedVariant) {
+      setSelectedVariant(product.variants[0])
+    }
+  }, [product, selectedVariant])
 
-  const sizes = ["XS", "S", "M", "L", "XL", "XXL"]
-  const colors = [
-    { name: "Black", value: "#000000" },
-    { name: "White", value: "#FFFFFF" },
-    { name: "Navy", value: "#1E3A8A" },
-    { name: "Gray", value: "#6B7280" },
-  ]
+  // Get current images based on selected variant
+  const getCurrentImages = () => {
+    if (selectedVariant && selectedVariant.images && selectedVariant.images.length > 0) {
+      return [product.mainImageUrl, ...selectedVariant.images]
+    }
+    return [
+      product.mainImageUrl,
+      "/placeholder.svg?height=600&width=500",
+      "/placeholder.svg?height=600&width=500",
+      "/placeholder.svg?height=600&width=500",
+    ]
+  }
+
+  const currentImages = getCurrentImages()
+
+  // Reset selected image when variant changes
+  useEffect(() => {
+    setSelectedImage(0)
+  }, [selectedVariant])
+
+  // Get available sizes for selected variant
+  const getAvailableSizes = () => {
+    if (selectedVariant && selectedVariant.size) {
+      return selectedVariant.size
+    }
+    // Fallback to all sizes from all variants
+    const allSizes = product.variants?.flatMap((variant) => variant.size || []) || []
+    return [...new Set(allSizes)]
+  }
+
+  const availableSizes = getAvailableSizes()
+
+  // Calculate sale percentage
+  const getSalePercentage = () => {
+    if (product.OriginalPrice && product.price && product.OriginalPrice > product.price) {
+      return Math.round(((product.OriginalPrice - product.price) / product.OriginalPrice) * 100)
+    }
+    return 0
+  }
+
+  const salePercentage = getSalePercentage()
+
+  // Get current price (use discount price if available)
+  const getCurrentPrice = () => {
+    return product.discountPrice || product.price
+  }
 
   const features = [
     { icon: Truck, text: "Free shipping on orders over $100" },
@@ -55,8 +88,23 @@ export default function ProductPage({ params }) {
   ]
 
   const handleAddToCart = () => {
-    for (let i = 0; i < quantity; i++) {
-      addItem(product)
+    if (!selectedVariant) {
+      alert("Please select a color")
+      return
+    }
+    if (!selectedSize) {
+      alert("Please select a size")
+      return
+    }
+
+    addItem(product, selectedVariant, selectedSize, quantity)
+  }
+
+  const handleVariantChange = (variant) => {
+    setSelectedVariant(variant)
+    // Reset size selection if current size is not available in new variant
+    if (selectedSize && !variant.size?.includes(selectedSize)) {
+      setSelectedSize("")
     }
   }
 
@@ -97,22 +145,37 @@ export default function ProductPage({ params }) {
               {/* Main Image */}
               <div className="relative overflow-hidden rounded-lg bg-gray-100">
                 <motion.img
-                  key={selectedImage}
-                  src={productImages[selectedImage]}
-                  alt={product.name}
+                  key={`${selectedVariant?.color}-${selectedImage}`}
+                  src={currentImages[selectedImage]}
+                  alt={`${product.name} - ${selectedVariant?.color || "Default"}`}
                   className="w-full h-96 lg:h-[600px] object-cover"
                   initial={{ opacity: 0, scale: 1.1 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.3 }}
                 />
-                {product.sale && <Badge className="absolute top-4 left-4 bg-red-500 text-white">Sale</Badge>}
+                {(product.sale || salePercentage > 0) && (
+                  <Badge className="absolute top-4 left-4 bg-red-500 text-white">
+                    {salePercentage > 0 ? `-${salePercentage}%` : "Sale"}
+                  </Badge>
+                )}
+                {selectedVariant && (
+                  <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2">
+                    <div className="flex items-center space-x-2">
+                      <div
+                        className="w-4 h-4 rounded-full border border-gray-300"
+                        style={{ backgroundColor: selectedVariant.colorHex }}
+                      />
+                      <span className="text-sm font-medium text-gray-900">{selectedVariant.color}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Thumbnail Images */}
               <div className="grid grid-cols-4 gap-4">
-                {productImages.map((image, index) => (
+                {currentImages.map((image, index) => (
                   <motion.button
-                    key={index}
+                    key={`${selectedVariant?.color}-thumb-${index}`}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => setSelectedImage(index)}
@@ -149,32 +212,58 @@ export default function ProductPage({ params }) {
                 </div>
                 <span className="text-sm text-gray-600">(128 reviews)</span>
               </div>
-              <p className="text-gray-600 text-lg leading-relaxed">
-                Experience luxury and comfort with this premium piece from our collection. Crafted with the finest
-                materials and attention to detail, this item represents the perfect blend of style and functionality.
-              </p>
+              <p className="text-gray-600 text-lg leading-relaxed">{product.description}</p>
             </div>
 
             {/* Price */}
             <div className="flex items-center space-x-4">
-              <span className="text-3xl font-bold text-gray-900">${product.price}</span>
-              {product.originalPrice && (
-                <span className="text-xl text-gray-400 line-through">${product.originalPrice}</span>
+              <span className="text-3xl font-bold text-gray-900">${getCurrentPrice()}</span>
+              {product.OriginalPrice && product.OriginalPrice !== getCurrentPrice() && (
+                <span className="text-xl text-gray-400 line-through">${product.OriginalPrice}</span>
               )}
-              {product.sale && (
-                <Badge className="bg-red-500 text-white">
-                  Save ${(product.originalPrice - product.price).toFixed(2)}
-                </Badge>
-              )}
+              {salePercentage > 0 && <Badge className="bg-red-500 text-white">Save {salePercentage}%</Badge>}
             </div>
 
             <Separator />
 
+            {/* Color Selection */}
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-3">
+                Color {selectedVariant && <span className="font-normal text-gray-600">- {selectedVariant.color}</span>}
+              </h3>
+              <div className="flex space-x-3">
+                {product.variants?.map((variant) => (
+                  <motion.button
+                    key={variant.color}
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => handleVariantChange(variant)}
+                    className={`relative w-10 h-10 rounded-full border-2 transition-all ${
+                      selectedVariant?.color === variant.color ? "border-gray-900 scale-110" : "border-gray-300"
+                    }`}
+                    style={{ backgroundColor: variant.colorHex }}
+                    title={variant.color}
+                  >
+                    {selectedVariant?.color === variant.color && (
+                      <div className="absolute inset-0 rounded-full border-2 border-white" />
+                    )}
+                    {!variant.isAvailable && (
+                      <div className="absolute inset-0 bg-gray-500/50 rounded-full flex items-center justify-center">
+                        <div className="w-6 h-0.5 bg-white transform rotate-45" />
+                      </div>
+                    )}
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+
             {/* Size Selection */}
             <div>
-              <h3 className="font-semibold text-gray-900 mb-3">Size</h3>
+              <h3 className="font-semibold text-gray-900 mb-3">
+                Size {selectedSize && <span className="font-normal text-gray-600">- {selectedSize}</span>}
+              </h3>
               <div className="grid grid-cols-6 gap-2">
-                {sizes.map((size) => (
+                {availableSizes.map((size) => (
                   <motion.button
                     key={size}
                     whileHover={{ scale: 1.05 }}
@@ -192,25 +281,25 @@ export default function ProductPage({ params }) {
               </div>
             </div>
 
-            {/* Color Selection */}
-            <div>
-              <h3 className="font-semibold text-gray-900 mb-3">Color</h3>
-              <div className="flex space-x-3">
-                {colors.map((color) => (
-                  <motion.button
-                    key={color.name}
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setSelectedColor(color.name)}
-                    className={`w-8 h-8 rounded-full border-2 transition-all ${
-                      selectedColor === color.name ? "border-gray-900 scale-110" : "border-gray-300"
+            {/* Stock Information */}
+            {selectedVariant && (
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Stock Available:</span>
+                  <span
+                    className={`text-sm font-medium ${
+                      selectedVariant.quantity > 10
+                        ? "text-green-600"
+                        : selectedVariant.quantity > 0
+                          ? "text-yellow-600"
+                          : "text-red-600"
                     }`}
-                    style={{ backgroundColor: color.value }}
-                    title={color.name}
-                  />
-                ))}
+                  >
+                    {selectedVariant.quantity > 0 ? `${selectedVariant.quantity} units` : "Out of stock"}
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Quantity */}
             <div>
@@ -227,10 +316,14 @@ export default function ProductPage({ params }) {
                   <button
                     onClick={() => setQuantity(quantity + 1)}
                     className="px-3 py-2 hover:bg-gray-50 transition-colors"
+                    disabled={selectedVariant && quantity >= selectedVariant.quantity}
                   >
                     +
                   </button>
                 </div>
+                {selectedVariant && quantity > selectedVariant.quantity && (
+                  <span className="text-sm text-red-600">Only {selectedVariant.quantity} available</span>
+                )}
               </div>
             </div>
 
@@ -239,11 +332,14 @@ export default function ProductPage({ params }) {
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <Button
                   onClick={handleAddToCart}
-                  className="w-full bg-gray-900 hover:bg-gray-800 text-white py-3 text-lg font-semibold"
+                  disabled={!selectedVariant || !selectedSize || selectedVariant.quantity === 0}
+                  className="w-full bg-gray-900 hover:bg-gray-800 text-white py-3 text-lg font-semibold disabled:bg-gray-400"
                   size="lg"
                 >
                   <ShoppingBag className="w-5 h-5 mr-2" />
-                  Add to Cart - ${(product.price * quantity).toFixed(2)}
+                  {selectedVariant?.quantity === 0
+                    ? "Out of Stock"
+                    : `Add to Cart - $${(getCurrentPrice() * quantity).toFixed(2)}`}
                 </Button>
               </motion.div>
 
@@ -282,7 +378,10 @@ export default function ProductPage({ params }) {
               <h3 className="font-semibold text-gray-900">Product Details</h3>
               <div className="space-y-2 text-gray-600">
                 <p>
-                  <strong>Material:</strong> 100% Premium Cotton
+                  <strong>Material:</strong> {product.material || "Premium Quality"}
+                </p>
+                <p>
+                  <strong>Weight:</strong> {product.weight ? `${product.weight}g` : "Lightweight"}
                 </p>
                 <p>
                   <strong>Care:</strong> Machine wash cold, tumble dry low
@@ -321,14 +420,14 @@ export default function ProductPage({ params }) {
                     <div className="group cursor-pointer">
                       <div className="relative overflow-hidden rounded-lg mb-4">
                         <img
-                          src={relatedProduct.image || "/placeholder.svg"}
+                          src={relatedProduct.mainImageUrl || relatedProduct.image || "/placeholder.svg"}
                           alt={relatedProduct.name}
                           className="w-full h-64 object-cover group-hover:scale-105 transition-transform duration-300"
                         />
                       </div>
                       <h3 className="font-semibold text-gray-900 mb-1">{relatedProduct.name}</h3>
                       <p className="text-gray-600 text-sm mb-2">{relatedProduct.category}</p>
-                      <p className="font-bold text-gray-900">${relatedProduct.price}</p>
+                      <p className="font-bold text-gray-900">${relatedProduct.discountPrice || relatedProduct.price}</p>
                     </div>
                   </Link>
                 </motion.div>
@@ -341,3 +440,10 @@ export default function ProductPage({ params }) {
     </div>
   )
 }
+
+
+
+
+
+
+

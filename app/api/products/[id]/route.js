@@ -17,8 +17,8 @@ cloudinary.config({
 // GET: Fetch a single product by ID
 export const GET = handleRouteError(async (req, { params }) => {
   await dbConnect();
-  const { id } = params;
-
+  const { id } = await params;
+  console.log("the id is ", id)
   if (!isValidObjectId(id)) {
     throw new ApiError(400, "Invalid product ID format.");
   }
