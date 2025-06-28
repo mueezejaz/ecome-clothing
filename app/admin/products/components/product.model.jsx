@@ -60,6 +60,7 @@ const initialFormData = {
 
 export default function ProductModal({ isOpen, onClose, product, onProductSaved }) {
   const inputRef = useRef(null); // Renamed for clarity
+  console.log("the data is " , product)
   const [imageUploadTarget, setImageUploadTarget] = useState(null); // 'main' or variant index
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -80,9 +81,7 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
           material: product.material || "",
           weight: product.weight?.toString() || "",
           isActive: product.isActive !== undefined ? product.isActive : true,
-          // featured: product.featured || false,
-          // sale: product.sale || false,
-          variants: product.variants?.map(v => ({ // Ensure variants have all needed fields
+          variants: product.variants?.map(v => ({ 
             ...v,
             size: v.size || [],
             images: v.images || [],
@@ -355,7 +354,8 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
                         <div className="space-y-2">
                           <Label>Category *</Label>
                           <Select
-                            defaultValue = {formData.category}
+                            defaultValue = {product.category}
+                            value = {product.category}
                             onValueChange={(value) => handleInputChange("category", value)}
                           >
                             <SelectTrigger>
@@ -614,12 +614,10 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
                                       <Label>Quantity in Stock</Label>
                                       <Input
                                         type="number"
-                                        value={variant.quantity}
+                                        value={variant?.quantity || ""}
                                         onChange={(e) =>
                                           updateVariant(index, "quantity", Number.parseInt(e.target.value) || 0)
                                         }
-                                        placeholder="0"
-                                        min="0"
                                         disabled={isSubmitting || isUploading}
                                       />
                                     </div>
