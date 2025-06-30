@@ -54,7 +54,7 @@ export default function ProductsPage() {
   );
 
   const handleEditProduct = (product) => {
-    setSelectedProduct(product) 
+    setSelectedProduct(product)
     setIsModalOpen(true)
   }
 
@@ -334,13 +334,13 @@ export default function ProductsPage() {
         </main>
       </div>
 
-<ProductModal
-  key={selectedProduct?._id || "new-product"} // Use MongoDB _id for key
-  isOpen={isModalOpen}
-  onClose={() => setIsModalOpen(false)}
-  product={selectedProduct}
-  onProductSaved={handleProductSaved} // Pass callback to refresh list
-/>
+      <ProductModal
+        key={selectedProduct?._id || "new-product"} // Use MongoDB _id for key
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        product={selectedProduct}
+        onProductSaved={handleProductSaved} // Pass callback to refresh list
+      />
     </div>
   )
 }

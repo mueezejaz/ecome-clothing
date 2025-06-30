@@ -69,7 +69,7 @@ export let POST = handleRouteError(async (req) => {
     imageUrl: uploadResult.secure_url,
     publicId: uploadResult.public_id,
     fileName: file.name,
-    dbId: newImage._id, // Return the database ID of the new image
+    dbId: newImage._id, 
   }, { status: 200 });
 });
 

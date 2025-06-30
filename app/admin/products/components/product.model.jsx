@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card,CardDescription, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import axiosInstance from "@/app/config/axios"
@@ -354,8 +354,7 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
                         <div className="space-y-2">
                           <Label>Category *</Label>
                           <Select
-                            defaultValue = {product.category}
-                            value = {product.category}
+                            defaultValue = {product?.category ||""}
                             onValueChange={(value) => handleInputChange("category", value)}
                           >
                             <SelectTrigger>
@@ -426,7 +425,7 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
                       <CardContent>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div className="space-y-2">
-                            <Label htmlFor="OriginalPrice">Original Price ($) *</Label>
+                            <Label htmlFor="OriginalPrice">Original Price *</Label>
                             <Input
                               id="OriginalPrice"
                               type="number"
@@ -437,9 +436,10 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
                               placeholder="e.g., 29.99"
                               required
                             />
+                            <CardDescription>enter the price you buy it for</CardDescription>
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="price">Current Price ($) *</Label>
+                            <Label htmlFor="price">Current Price *</Label>
                             <Input
                               id="price"
                               type="number"
@@ -450,9 +450,10 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
                               placeholder="e.g., 19.99"
                               required
                             />
+                            <CardDescription>enter the price to sale it for </CardDescription>
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="discountPrice">Discount Price ($)</Label>
+                            <Label htmlFor="discountPrice">Discount Price</Label>
                             <Input
                               id="discountPrice"
                               type="number"
@@ -462,6 +463,7 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
                               onChange={(e) => handleInputChange("discountPrice", e.target.value)}
                               placeholder="e.g., 14.99 (optional)"
                             />
+                            <CardDescription>enter discountprice </CardDescription>
                           </div>
                         </div>
                       </CardContent>

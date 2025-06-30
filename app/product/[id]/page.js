@@ -1,75 +1,267 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, use } from "react"
 import { motion } from "framer-motion"
-import { ArrowLeft, Heart, ShoppingBag, Star, Truck, Shield, RotateCcw } from "lucide-react"
+import { ArrowLeft, Heart, ShoppingBag, Star, Truck, Shield, RotateCcw, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useCart } from "../../context/cart-context"
-import { products } from "../../data/products"
+import { toast } from "sonner"
 import Link from "next/link"
 import Header from "../../components/header"
 import Footer from "../../components/footer"
 import { notFound } from "next/navigation"
+import axiosInstance from "@/app/config/axios"
+import axios from "axios"
 
 export default function ProductPage({ params }) {
+  const [product, setProduct] = useState(null)
+  const [relatedProducts, setRelatedProducts] = useState([])
+  const [loading, setLoading] = useState(true)
   const [selectedSize, setSelectedSize] = useState("")
   const [selectedVariant, setSelectedVariant] = useState(null)
   const [selectedImage, setSelectedImage] = useState(0)
   const [quantity, setQuantity] = useState(1)
+  const [addingToCart, setAddingToCart] = useState(false)
+  const paramss = use(params)
+  const { addItem, items } = useCart()
 
-  const { addItem } = useCart()
-
-  const product = products.find((p) => p.id === params.id)
-
-  if (!product) {
-    notFound()
-  }
-
-  // Initialize with first variant
+  // Fetch product data
   useEffect(() => {
-    if (product.variants && product.variants.length > 0 && !selectedVariant) {
-      setSelectedVariant(product.variants[0])
+    const fetchProduct = async () => {
+      try {
+        setLoading(true)
+        const response = await axiosInstance(`/api/products/${paramss.id}`)
+
+        setProduct(response.data.data)
+        console.log(response)
+        // Initialize with first variant
+        if (response.data?.data?.variants && response.data?.data?.variants.length > 0) {
+          setSelectedVariant(response.data.data.variants[0])
+        }
+      } catch (error) {
+        let errorMessage = error.response?.data?.message || "faild to get product";
+        console.error('Error fetching product:', error)
+        toast.error(errorMessage);
+        notFound();
+      } finally {
+        setLoading(false)
+      }
     }
-  }, [product, selectedVariant])
 
-  // Get current images based on selected variant
-  const getCurrentImages = () => {
-    if (selectedVariant && selectedVariant.images && selectedVariant.images.length > 0) {
-      return [product.mainImageUrl, ...selectedVariant.images]
+    if (paramss.id) {
+      fetchProduct()
     }
-    return [
-      product.mainImageUrl,
-      "/placeholder.svg?height=600&width=500",
-      "/placeholder.svg?height=600&width=500",
-      "/placeholder.svg?height=600&width=500",
-    ]
-  }
+  }, [paramss.id])
 
-  const currentImages = getCurrentImages()
+  // Fetch related products
+  useEffect(() => {
+    const fetchRelatedProducts = async () => {
+      if (!product) return
 
+      try {
+        const response = await axiosInstance(`/api/products/related/${product._id}`)
+        setRelatedProducts(response.data.data || [])
+      } catch (error) {
+        const errorMessage = error.response?.data?.message || "faild to get product";
+        console.error('Error fetching related products:', error)
+        toast.error(errorMessage)
+      }
+    }
+
+    fetchRelatedProducts()
+  }, [product])
+console.log("the cart items are",items);
   // Reset selected image when variant changes
   useEffect(() => {
     setSelectedImage(0)
   }, [selectedVariant])
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white animate-pulse">
+        <main className="container mx-auto px-4 py-8">
+          {/* Breadcrumb */}
+          <div className="flex items-center space-x-2 text-sm text-gray-300 mb-8">
+            <div className="h-4 w-16 bg-gray-200 rounded" />
+            <span>/</span>
+            <div className="h-4 w-16 bg-gray-200 rounded" />
+            <span>/</span>
+            <div className="h-4 w-24 bg-gray-200 rounded" />
+          </div>
+
+          {/* Back Button */}
+          <div className="mb-8">
+            <div className="h-6 w-40 bg-gray-200 rounded" />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            {/* Left - Product Images */}
+            <div>
+              <div className="w-full h-96 lg:h-[600px] bg-gray-200 rounded-lg" />
+              <div className="grid grid-cols-4 gap-4 mt-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-20 bg-gray-200 rounded-lg" />
+                ))}
+              </div>
+            </div>
+
+            {/* Right - Product Info */}
+            <div className="space-y-6">
+              {/* Title and rating */}
+              <div>
+                <div className="h-8 w-2/3 bg-gray-200 rounded mb-2" />
+                <div className="flex items-center space-x-2 mb-4">
+                  <div className="flex space-x-1">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="w-4 h-4 bg-gray-200 rounded" />
+                    ))}
+                  </div>
+                  <div className="h-4 w-20 bg-gray-200 rounded" />
+                </div>
+                <div className="space-y-2">
+                  <div className="h-4 w-full bg-gray-200 rounded" />
+                  <div className="h-4 w-5/6 bg-gray-200 rounded" />
+                  <div className="h-4 w-3/4 bg-gray-200 rounded" />
+                </div>
+              </div>
+
+              {/* Price */}
+              <div className="flex items-center space-x-4">
+                <div className="h-8 w-24 bg-gray-200 rounded" />
+                <div className="h-6 w-16 bg-gray-200 rounded" />
+                <div className="h-6 w-20 bg-gray-200 rounded" />
+              </div>
+
+              {/* Color */}
+              <div>
+                <div className="h-4 w-28 bg-gray-200 rounded mb-3" />
+                <div className="flex space-x-3">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="w-10 h-10 bg-gray-200 rounded-full" />
+                  ))}
+                </div>
+              </div>
+
+              {/* Size */}
+              <div>
+                <div className="h-4 w-20 bg-gray-200 rounded mb-3" />
+                <div className="grid grid-cols-6 gap-2">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="h-10 bg-gray-200 rounded-md" />
+                  ))}
+                </div>
+              </div>
+
+              {/* Stock Info */}
+              <div className="h-10 w-full bg-gray-200 rounded-lg" />
+
+              {/* Quantity */}
+              <div>
+                <div className="h-4 w-20 bg-gray-200 rounded mb-2" />
+                <div className="flex space-x-4">
+                  <div className="flex items-center border border-gray-200 rounded-md overflow-hidden">
+                    <div className="px-3 py-2 w-8 bg-gray-200" />
+                    <div className="px-4 py-2 border-x border-gray-200 w-12 bg-gray-200" />
+                    <div className="px-3 py-2 w-8 bg-gray-200" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-4">
+                <div className="h-14 w-full bg-gray-200 rounded" />
+                <div className="h-14 w-full bg-gray-200 rounded" />
+              </div>
+
+              {/* Features */}
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-center space-x-3">
+                    <div className="w-5 h-5 bg-gray-200 rounded" />
+                    <div className="h-4 w-3/4 bg-gray-200 rounded" />
+                  </div>
+                ))}
+              </div>
+
+              {/* Product Details */}
+              <div className="space-y-4">
+                <div className="h-4 w-40 bg-gray-200 rounded" />
+                <div className="space-y-2">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="h-4 w-2/3 bg-gray-200 rounded" />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Related Products */}
+          <div className="mt-20 space-y-4">
+            <div className="h-8 w-1/3 bg-gray-200 rounded" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i}>
+                  <div className="h-64 bg-gray-200 rounded-lg mb-4" />
+                  <div className="h-4 w-3/4 bg-gray-200 rounded mb-2" />
+                  <div className="h-3 w-1/2 bg-gray-200 rounded mb-2" />
+                  <div className="h-5 w-1/4 bg-gray-200 rounded" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </main>
+      </div>
+
+    )
+  }
+
+  if (!product) {
+    notFound()
+  }
+  let count = 0;
+  // Get current images based on selected variant
+  const getCurrentImages = () => {
+    const images = []
+
+    // Add main image first
+    if (product.mainImage?.imageUrl) {
+      images.push(product.mainImage.imageUrl)
+    }
+    console.log("current count is ", count, "and the product is ", product, "and the varient is ", selectedVariant)
+    // Add variant images
+    if (selectedVariant?.images && selectedVariant.images.length > 0) {
+      selectedVariant.images.forEach(img => {
+        if (img.imageUrl) {
+          images.push(img.imageUrl)
+        }
+      })
+    }
+
+    if (images.length === 0) {
+      toast.error("faild to get images")
+    }
+
+    return images
+  }
+
+  const currentImages = getCurrentImages()
+
   // Get available sizes for selected variant
   const getAvailableSizes = () => {
-    if (selectedVariant && selectedVariant.size) {
-      return selectedVariant.size
+    if (selectedVariant?.size) {
+      return Array.isArray(selectedVariant.size) ? selectedVariant.size : [selectedVariant.size]
     }
-    // Fallback to all sizes from all variants
-    const allSizes = product.variants?.flatMap((variant) => variant.size || []) || []
-    return [...new Set(allSizes)]
+    return []
   }
 
   const availableSizes = getAvailableSizes()
 
   // Calculate sale percentage
   const getSalePercentage = () => {
-    if (product.OriginalPrice && product.price && product.OriginalPrice > product.price) {
-      return Math.round(((product.OriginalPrice - product.price) / product.OriginalPrice) * 100)
+    if (product.discountPrice && product.price && product.discountPrice < product.price) {
+      return Math.round(((product.price - product.discountPrice) / product.price) * 100)
     }
     return 0
   }
@@ -87,17 +279,32 @@ export default function ProductPage({ params }) {
     { icon: Shield, text: "2-year warranty included" },
   ]
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (!selectedVariant) {
-      alert("Please select a color")
+      toast.error("Please select a color")
       return
     }
     if (!selectedSize) {
-      alert("Please select a size")
+      toast.error("Please select a size")
+      return
+    }
+    if (quantity > selectedVariant.quantity) {
+      toast.error(`Only ${selectedVariant.quantity} items available`)
       return
     }
 
-    addItem(product, selectedVariant, selectedSize, quantity)
+    setAddingToCart(true)
+    try {
+      addItem(product, selectedVariant, selectedSize, quantity)
+      toast.success(`${product.name} added to cart!`, {
+        description: `${quantity} item(s) in ${selectedVariant.color}, size ${selectedSize}`
+      })
+    } catch (error) {
+      console.error('Error adding to cart:', error)
+      toast.error("Failed to add item to cart")
+    } finally {
+      setAddingToCart(false)
+    }
   }
 
   const handleVariantChange = (variant) => {
@@ -106,6 +313,13 @@ export default function ProductPage({ params }) {
     if (selectedSize && !variant.size?.includes(selectedSize)) {
       setSelectedSize("")
     }
+  }
+
+  const handleWishlist = () => {
+    // Implement wishlist functionality here
+    toast.success("Added to wishlist!", {
+      description: `${product.name} has been saved to your wishlist`
+    })
   }
 
   return (
@@ -152,10 +366,13 @@ export default function ProductPage({ params }) {
                   initial={{ opacity: 0, scale: 1.1 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.3 }}
+                  onError={(e) => {
+                    e.target.alt = "faild to get image"
+                  }}
                 />
-                {(product.sale || salePercentage > 0) && (
+                {salePercentage > 0 && (
                   <Badge className="absolute top-4 left-4 bg-red-500 text-white">
-                    {salePercentage > 0 ? `-${salePercentage}%` : "Sale"}
+                    -{salePercentage}%
                   </Badge>
                 )}
                 {selectedVariant && (
@@ -163,7 +380,7 @@ export default function ProductPage({ params }) {
                     <div className="flex items-center space-x-2">
                       <div
                         className="w-4 h-4 rounded-full border border-gray-300"
-                        style={{ backgroundColor: selectedVariant.colorHex }}
+                        style={{ backgroundColor: selectedVariant.colorHex || '#000' }}
                       />
                       <span className="text-sm font-medium text-gray-900">{selectedVariant.color}</span>
                     </div>
@@ -179,14 +396,16 @@ export default function ProductPage({ params }) {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => setSelectedImage(index)}
-                    className={`relative overflow-hidden rounded-lg border-2 transition-all ${
-                      selectedImage === index ? "border-gray-900" : "border-gray-200"
-                    }`}
+                    className={`relative overflow-hidden rounded-lg border-2 transition-all ${selectedImage === index ? "border-gray-900" : "border-gray-200"
+                      }`}
                   >
                     <img
-                      src={image || "/placeholder.svg"}
+                      src={image}
                       alt={`${product.name} ${index + 1}`}
                       className="w-full h-20 object-cover"
+                      onError={(e) => {
+                        e.target.src = "/placeholder.svg?height=80&width=80"
+                      }}
                     />
                   </motion.button>
                 ))}
@@ -218,8 +437,8 @@ export default function ProductPage({ params }) {
             {/* Price */}
             <div className="flex items-center space-x-4">
               <span className="text-3xl font-bold text-gray-900">${getCurrentPrice()}</span>
-              {product.OriginalPrice && product.OriginalPrice !== getCurrentPrice() && (
-                <span className="text-xl text-gray-400 line-through">${product.OriginalPrice}</span>
+              {product.price && product.price !== getCurrentPrice() && (
+                <span className="text-xl text-gray-400 line-through">${product.price}</span>
               )}
               {salePercentage > 0 && <Badge className="bg-red-500 text-white">Save {salePercentage}%</Badge>}
             </div>
@@ -238,10 +457,9 @@ export default function ProductPage({ params }) {
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => handleVariantChange(variant)}
-                    className={`relative w-10 h-10 rounded-full border-2 transition-all ${
-                      selectedVariant?.color === variant.color ? "border-gray-900 scale-110" : "border-gray-300"
-                    }`}
-                    style={{ backgroundColor: variant.colorHex }}
+                    className={`relative w-10 h-10 rounded-full border-2 transition-all ${selectedVariant?.color === variant.color ? "border-gray-900 scale-110" : "border-gray-300"
+                      }`}
+                    style={{ backgroundColor: variant.colorHex || '#000' }}
                     title={variant.color}
                   >
                     {selectedVariant?.color === variant.color && (
@@ -268,12 +486,14 @@ export default function ProductPage({ params }) {
                     key={size}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={() => setSelectedSize(size)}
-                    className={`py-2 px-3 border rounded-md text-sm font-medium transition-all ${
-                      selectedSize === size
-                        ? "border-gray-900 bg-gray-900 text-white"
-                        : "border-gray-300 hover:border-gray-400"
-                    }`}
+                    onClick={() => {
+                      setSelectedSize(size)
+                      toast.info(`Selected size ${size}`)
+                    }}
+                    className={`py-2 px-3 border rounded-md text-sm font-medium transition-all ${selectedSize === size
+                      ? "border-gray-900 bg-gray-900 text-white"
+                      : "border-gray-300 hover:border-gray-400"
+                      }`}
                   >
                     {size}
                   </motion.button>
@@ -287,13 +507,12 @@ export default function ProductPage({ params }) {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Stock Available:</span>
                   <span
-                    className={`text-sm font-medium ${
-                      selectedVariant.quantity > 10
-                        ? "text-green-600"
-                        : selectedVariant.quantity > 0
-                          ? "text-yellow-600"
-                          : "text-red-600"
-                    }`}
+                    className={`text-sm font-medium ${selectedVariant.quantity > 10
+                      ? "text-green-600"
+                      : selectedVariant.quantity > 0
+                        ? "text-yellow-600"
+                        : "text-red-600"
+                      }`}
                   >
                     {selectedVariant.quantity > 0 ? `${selectedVariant.quantity} units` : "Out of stock"}
                   </span>
@@ -332,19 +551,29 @@ export default function ProductPage({ params }) {
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <Button
                   onClick={handleAddToCart}
-                  disabled={!selectedVariant || !selectedSize || selectedVariant.quantity === 0}
+                  disabled={!selectedVariant || !selectedSize || selectedVariant.quantity === 0 || addingToCart}
                   className="w-full bg-gray-900 hover:bg-gray-800 text-white py-3 text-lg font-semibold disabled:bg-gray-400"
                   size="lg"
                 >
-                  <ShoppingBag className="w-5 h-5 mr-2" />
-                  {selectedVariant?.quantity === 0
-                    ? "Out of Stock"
-                    : `Add to Cart - $${(getCurrentPrice() * quantity).toFixed(2)}`}
+                  {addingToCart ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Adding to Cart...
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingBag className="w-5 h-5 mr-2" />
+                      {selectedVariant?.quantity === 0
+                        ? "Out of Stock"
+                        : `Add to Cart - $${(getCurrentPrice() * quantity).toFixed(2)}`}
+                    </>
+                  )}
                 </Button>
               </motion.div>
 
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <Button
+                  onClick={handleWishlist}
                   variant="outline"
                   className="w-full border-gray-900 text-gray-900 hover:bg-gray-900 hover:text-white py-3 text-lg font-semibold"
                   size="lg"
@@ -398,42 +627,46 @@ export default function ProductPage({ params }) {
         </div>
 
         {/* Related Products */}
-        <motion.section
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.8 }}
-          className="mt-20"
-        >
-          <h2 className="text-3xl font-bold text-gray-900 mb-8">You Might Also Like</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {products
-              .filter((p) => p.id !== product.id && p.category === product.category)
-              .slice(0, 4)
-              .map((relatedProduct, index) => (
+        {relatedProducts.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.8 }}
+            className="mt-20"
+          >
+            <h2 className="text-3xl font-bold text-gray-900 mb-8">You Might Also Like</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {relatedProducts.map((relatedProduct, index) => (
                 <motion.div
-                  key={relatedProduct.id}
+                  key={relatedProduct._id}
                   initial={{ opacity: 0, y: 30 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
                 >
-                  <Link href={`/product/${relatedProduct.id}`}>
+                  <Link href={`/product/${relatedProduct._id}`}>
                     <div className="group cursor-pointer">
                       <div className="relative overflow-hidden rounded-lg mb-4">
                         <img
-                          src={relatedProduct.mainImageUrl || relatedProduct.image || "/placeholder.svg"}
+                          src={relatedProduct.mainImage?.imageUrl || "/placeholder.svg"}
                           alt={relatedProduct.name}
                           className="w-full h-64 object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={(e) => {
+                            e.target.src = "/placeholder.svg?height=256&width=256"
+                          }}
                         />
                       </div>
                       <h3 className="font-semibold text-gray-900 mb-1">{relatedProduct.name}</h3>
                       <p className="text-gray-600 text-sm mb-2">{relatedProduct.category}</p>
-                      <p className="font-bold text-gray-900">${relatedProduct.discountPrice || relatedProduct.price}</p>
+                      <p className="font-bold text-gray-900">
+                        ${relatedProduct.discountPrice || relatedProduct.price}
+                      </p>
                     </div>
                   </Link>
                 </motion.div>
               ))}
-          </div>
-        </motion.section>
+            </div>
+          </motion.section>
+        )}
       </main>
 
       <Footer />

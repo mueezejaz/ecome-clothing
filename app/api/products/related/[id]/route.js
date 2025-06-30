@@ -1,7 +1,7 @@
 import dbConnect from '@/app/lib/dbConnect';
 import Product from '@/app/models/model.Product';
 import { NextResponse } from 'next/server';
-import { handleRouteError } from '@/app/utils/handleRouteError';
+import  handleRouteError  from '@/app/utils/handleRouteError.js';
 import mongoose from 'mongoose';
 
 import ApiError from '@/app/utils/ApiError'; // Import ApiError for consistency
@@ -12,7 +12,7 @@ const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 export const GET = handleRouteError(async (request, { params }) => {
   await dbConnect();
 
-  const { id } = params;
+  const { id } = await params;
 
   if (!isValidObjectId(id)) {
     throw new ApiError(400, "Invalid product ID format");

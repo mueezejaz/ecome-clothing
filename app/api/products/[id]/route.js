@@ -38,7 +38,7 @@ export const GET = handleRouteError(async (req, { params }) => {
 // PUT: Update an existing product by ID
 export const PUT = handleRouteError(async (req, { params }) => {
   await dbConnect();
-  const { id } = params;
+  const { id } = await params;
 
   if (!isValidObjectId(id)) {
     throw new ApiError(400, "Invalid product ID format.");
