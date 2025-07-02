@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Card,CardDescription, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardDescription, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import axiosInstance from "@/app/config/axios"
@@ -60,7 +60,7 @@ const initialFormData = {
 
 export default function ProductModal({ isOpen, onClose, product, onProductSaved }) {
   const inputRef = useRef(null); // Renamed for clarity
-  console.log("the data is " , product)
+  console.log("the data is ", product)
   const [imageUploadTarget, setImageUploadTarget] = useState(null); // 'main' or variant index
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -81,9 +81,9 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
           material: product.material || "",
           weight: product.weight?.toString() || "",
           isActive: product.isActive !== undefined ? product.isActive : true,
-          variants: product.variants?.map(v => ({ 
+          variants: product.variants?.map(v => ({
             ...v,
-            size: v.size || [],
+            size: v.size || "",
             images: v.images || [],
             isAvailable: v.isAvailable !== undefined ? v.isAvailable : true,
           })) || [],
@@ -93,14 +93,14 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
       }
     }
   }, [product, isOpen]);
-
+  console.log("the produt current state is ", formData )
   const validateForm = () => {
     const { name, description, price, OriginalPrice, discountPrice, category, mainImage, variants } = formData;
     if (!name.trim()) { toast.error("Product name is required."); return false; }
     if (!description.trim()) { toast.error("Product description is required."); return false; }
     if (isNaN(parseFloat(price)) || parseFloat(price) <= 0) { toast.error("Valid current price is required."); return false; }
     if (isNaN(parseFloat(OriginalPrice)) || parseFloat(OriginalPrice) <= 0) { toast.error("Valid original price is required."); return false; }
-    if (parseFloat(price) < parseFloat(discountPrice)) { toast.error("discount price can not be greater then the price");return false } 
+    if (parseFloat(price) < parseFloat(discountPrice)) { toast.error("discount price can not be greater then the price"); return false }
     if (!category) { toast.error("Category is required."); return false; }
     if (!mainImage?.imageUrl) { toast.error("Main product image is required."); return false; }
 
@@ -112,11 +112,11 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
     for (let i = 0; i < variants.length; i++) {
       const v = variants[i];
       if (!v.color.trim()) { toast.error(`Color is required for Variant ${i + 1}.`); return false; }
-      if (!v.size || v.size.length === 0) { toast.error(`At least one size is required for Variant ${i + 1}.`); return false; }
+      if (!v.size && typeof( v.size )!= "string") { toast.error(`At least one size is required for Variant ${i + 1}.`); return false; }
       if (isNaN(parseInt(v.quantity)) || parseInt(v.quantity) < 0) { toast.error(`Valid quantity is required for Variant ${i + 1}.`); return false; }
       if (!v.images || v.images.length === 0) { toast.error(`At least one image is required for Variant ${i + 1}.`); return false; }
       v.images.forEach(img => {
-        if(!img.imageUrl) {toast.error(`Image URL is missing for an image in Variant ${i+1}.`); return false;}
+        if (!img.imageUrl) { toast.error(`Image URL is missing for an image in Variant ${i + 1}.`); return false; }
       })
     }
     return true;
@@ -201,18 +201,11 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
     }))
   }
 
-  const toggleSize = (variantIndex, size) => {
-    const variant = formData.variants[variantIndex]
-    const currentSizes = variant.size || []
-    const newSizes = currentSizes.includes(size) ? currentSizes.filter((s) => s !== size) : [...currentSizes, size]
-
-    updateVariant(variantIndex, "size", newSizes)
+  function showLoadingMessage(msg = loading.message) {
+    toast("Loading", {
+      description: msg,
+    });
   }
-  function showLoadingMessage(msg = loading.message){
-      toast("Loading", {
-        description: msg, 
-      });
-  }  
   const handleImageUpload = async (e) => {
     if (isUploading) {
       toast.info("An image upload is already in progress.");
@@ -233,9 +226,9 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
           'Content-Type': 'multipart/form-data',
         },
       });
-      
+
       // Axios puts response data directly in `response.data`
-      const result = response.data; 
+      const result = response.data;
 
       toast.success(`Image "${result.fileName}" uploaded successfully!`, { id: toastId });
 
@@ -271,7 +264,7 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
     setImageUploadTarget(targetType);
     inputRef.current?.click();
   };
-  
+
   const removeImageFromVariant = (variantIndex, imagePublicIdToRemove) => {
     const variant = formData.variants[variantIndex];
     const newImages = variant.images.filter((img) => img.publicId !== imagePublicIdToRemove);
@@ -289,11 +282,11 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
     <AnimatePresence>
       {isOpen && (
         <>
-          <input 
-            ref={inputRef} 
-            type="file" 
+          <input
+            ref={inputRef}
+            type="file"
             accept="image/jpeg,image/png,image/gif,image/webp"
-            onChange={handleImageUpload} 
+            onChange={handleImageUpload}
             className="absolute right-[9999px]" // Visually hidden but accessible
           />
           <motion.div
@@ -354,7 +347,7 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
                         <div className="space-y-2">
                           <Label>Category *</Label>
                           <Select
-                            defaultValue = {product?.category ||""}
+                            value={product?.category || ""}
                             onValueChange={(value) => handleInputChange("category", value)}
                           >
                             <SelectTrigger>
@@ -385,16 +378,16 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
                         <Label>Main Product Image *</Label>
                         <div className="flex items-center space-x-4">
                           {formData.mainImage?.imageUrl ? (
-                             <div className="relative group">
-                                <img
-                                  src={formData.mainImage.imageUrl}
-                                  alt="Product preview"
-                                  className="w-20 h-20 rounded-lg object-cover border"
-                                />
-                              </div>
+                            <div className="relative group">
+                              <img
+                                src={formData.mainImage.imageUrl}
+                                alt="Product preview"
+                                className="w-20 h-20 rounded-lg object-cover border"
+                              />
+                            </div>
                           ) : (
                             <div className="w-20 h-20 rounded-lg border bg-gray-100 flex items-center justify-center">
-                                <Upload className="w-8 h-8 text-gray-400" />
+                              <Upload className="w-8 h-8 text-gray-400" />
                             </div>
                           )}
                           <Button
@@ -404,9 +397,9 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
                             disabled={isUploading || isSubmitting}
                           >
                             {isUploading && imageUploadTarget === "main" ? (
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                             ) : (
-                                <Upload className="w-4 h-4 mr-2" />
+                              <Upload className="w-4 h-4 mr-2" />
                             )}
                             {formData.mainImage?.imageUrl ? "Change Image" : "Upload Image"}
                           </Button>
@@ -415,7 +408,7 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
                       </div>
                     </CardContent>
                   </Card>
-                  
+
                   <fieldset disabled={isSubmitting || isUploading}>
                     {/* Pricing */}
                     <Card>
@@ -581,35 +574,32 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
                                     </div>
                                   </div>
 
-                                  {/* Size Selection */}
-                                  <div className="space-y-2">
-                                    <Label>Available Sizes</Label>
-                                    <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-                                      {sizeOptions.map((size) => (
-                                        <Button
-                                          key={size}
-                                          type="button"
-                                          variant={variant.size?.includes(size) ? "default" : "outline"}
-                                          size="sm"
-                                          onClick={() => toggleSize(index, size)}
-                                          className="text-xs"
-                                          disabled={isSubmitting || isUploading}
-                                        >
-                                          {size}
-                                        </Button>
-                                      ))}
+                                  {/* Size Size */}
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                      <Label>Select Size</Label>
+                                      <Select
+                                        value={variant.size || ""}
+                                        onValueChange={(value) => {
+                                          updateVariant(index,"size",value);  
+                                        }}
+                                        disabled={isSubmitting || isUploading}
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Selet Size" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {sizeOptions.map((size) => (
+                                            <SelectItem key={size} value={size}>
+                                              <div className="flex items-center space-x-2">
+                                                <span>{size}</span>
+                                              </div>
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
                                     </div>
-                                    {variant.size?.length > 0 && (
-                                      <div className="flex flex-wrap gap-1 mt-2">
-                                        {variant.size.map((size) => (
-                                          <Badge key={size} variant="secondary">
-                                            {size}
-                                          </Badge>
-                                        ))}
-                                      </div>
-                                    )}
                                   </div>
-
                                   {/* Quantity and Availability */}
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-2">
@@ -660,7 +650,7 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
                                     {(!variant.images || variant.images.length === 0) && <p className="text-xs text-red-500 pt-1">At least one image is required for each variant.</p>}
                                     <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
                                       {variant.images?.map((image, imageIndex) => (
-                                         image.imageUrl && ( // Only render if imageUrl exists
+                                        image.imageUrl && ( // Only render if imageUrl exists
                                           <div key={image.publicId || imageIndex} className="relative group">
                                             <img
                                               src={image.imageUrl}
@@ -687,7 +677,7 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
                             ))}
                           </div>
                         )}
-                         {formData.variants.length === 0 && <p className="text-xs text-red-500 pt-1">At least one variant is required.</p>}
+                        {formData.variants.length === 0 && <p className="text-xs text-red-500 pt-1">At least one variant is required.</p>}
                       </CardContent>
                     </Card>
 
@@ -708,7 +698,7 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
                                 id={`isActive-${product?._id}`}
                                 checked={formData.isActive}
                                 onCheckedChange={(checked) => handleInputChange("isActive", checked)}
-                                // disabled state is inherited from fieldset
+                              // disabled state is inherited from fieldset
                               />
                             </div>
                             {/* Removed Featured and On Sale switches as they are not in the Product Model from model.Product.js */}

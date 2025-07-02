@@ -33,11 +33,11 @@ const ProductSchema = new mongoose.Schema({
     {
       color: { type: String, required: true, trim: true },
       colorHex: { type: String, trim: true }, // e.g., #FF0000
-      size: [{
+      size: {
         type: String, required: true,
         enum: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '2T', '3T', 'One Size', '28', '30', '32', '34', '36', '38', '40', '42'],
         trim: true
-      }], // Expand as needed
+      }, // Expand as needed
       quantity: { type: Number, required: true, min: [0, 'Quantity cannot be negative'] },
       images: [
         {
