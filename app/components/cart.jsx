@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { useCart } from "../context/cart-context"
 
 export default function Cart({ isOpen, onClose }) {
-  const { items, updateQuantity, removeItem, total } = useCart()
+  const { items, updateQuantity ,itemCount, removeItem, total } = useCart()
 
   return (
     <AnimatePresence>
@@ -43,47 +43,60 @@ export default function Cart({ isOpen, onClose }) {
                 ) : (
                   <div className="space-y-4">
                     {items.map((item) => (
-                      <motion.div
-                        key={item.id}
-                        layout
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        className="flex items-center space-x-4 p-4 border rounded-lg"
-                      >
-                        <img
-                          src={item.image || "/placeholder.svg"}
-                          alt={item.name}
-                          className="w-16 h-16 object-cover rounded"
-                        />
-                        <div className="flex-1">
-                          <h3 className="font-medium">{item.name}</h3>
-                          <p className="text-gray-600">${item.price}</p>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="w-8 h-8"
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                        item.variants.map((variant) => (
+                          <motion.div
+                            key={variant._id}
+                            layout
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            className="flex items-center space-x-4 p-4 border rounded-lg"
                           >
-                            <Minus className="w-3 h-3" />
-                          </Button>
-                          <span className="w-8 text-center">{item.quantity}</span>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="w-8 h-8"
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          >
-                            <Plus className="w-3 h-3" />
-                          </Button>
-                        </div>
-                        <Button variant="ghost" size="icon" onClick={() => removeItem(item.id)}>
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </motion.div>
+                            <img
+                              src={variant.images[0]?.imageUrl || item.mainImage?.imageUrl || "./placeholder.png"}
+                              alt={item.name}
+                              className="w-16 h-16 object-cover rounded"
+                            />
+                            <div className="flex-1">
+                              <h3 className="font-medium">{item.name}</h3>
+                              <p className="text-gray-600">
+                                ${item.price}
+                              </p>
+                              <p className="ml-2 text-sm text-gray-500">Size: {variant.size}</p>
+                              <p className="ml-2 text-sm text-gray-500">color:
+                                <span
+                                  className="inline-block w-3 h-3 rounded-full ml-2 align-middle"
+                                  style={{ backgroundColor: variant.colorHex }}
+                                  title={variant.colorHex}
+                                ></span>
+                              </p>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="w-8 h-8"
+                                onClick={() => updateQuantity(item._id , variant._id,itemCount(item._id , variant._id) - 1)}
+                              >
+                                <Minus className="w-3 h-3" />
+                              </Button>
+                              <span className="w-8 text-center">{itemCount(item._id , variant._id)}</span>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="w-8 h-8"
+                                onClick={() => updateQuantity(item._id , variant._id,itemCount(item._id , variant._id) + 1)}
+                              >
+                                <Plus className="w-3 h-3" />
+                              </Button>
+                            </div>
+                            <Button variant="ghost" size="icon" onClick={() => removeItem(item._id, variant._id)}>
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </motion.div>
+                        ))
                     ))}
+
                   </div>
                 )}
               </div>
