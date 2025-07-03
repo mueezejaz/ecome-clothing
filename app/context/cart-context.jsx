@@ -8,30 +8,49 @@ export function CartProvider({ children }) {
   const [items, setItems] = useState([])
 
   const addItem = (product, selectedVariant = null, selectedSize = null, quantity = 1) => {
+    console.log("the quantity we are getting", quantity);
     setItems((prev) => {
-      // Create a unique identifier for the cart item including variant and size
-      const itemId = product._id; 
+      const existingProduct = prev.find((item) => item._id === product._id);
 
-      const existing = prev.find((item) => item.itemId === itemId)
+      if (existingProduct) {
+        const existingVariant = existingProduct.variants.find(variant => variant._id === selectedVariant._id);
 
-      if (existing) {
-        return prev.map((item) => (item.itemId === itemId ? { ...item, quantity: item.quantity + quantity } : item))
+        if (existingVariant) {
+          const updatedVariant = {
+            ...existingVariant,
+            quantity: existingVariant.quantity + quantity
+          };
+
+          console.log("the quantity after", updatedVariant.quantity);
+
+          return prev.map(item =>
+            item._id === product._id
+              ? {
+                ...item,
+                variants: item.variants.map(variant =>
+                  variant._id === selectedVariant._id ? updatedVariant : variant
+                )
+              }
+              : item
+          );
+        } else {
+          // Add new variant
+          return prev.map(item =>
+            item._id === product._id
+              ? { ...item, variants: [...item.variants, { ...selectedVariant, quantity }] }
+              : item
+          );
+        }
       }
-
       return [
         ...prev,
         {
           ...product,
-          itemId,
-          quantity,
-          selectedVariant,
-          selectedSize,
-          // Use discount price if available, otherwise use regular price
-          price: product.discountPrice || product.price,
-        },
-      ]
-    })
-  }
+          variants: [{ ...selectedVariant, quantity }]
+        }
+      ];
+    });
+  };
 
   const removeItem = (itemId) => {
     setItems((prev) => prev.filter((item) => item.itemId !== itemId))
@@ -44,7 +63,7 @@ export function CartProvider({ children }) {
     }
     setItems((prev) => prev.map((item) => (item.itemId === itemId ? { ...item, quantity } : item)))
   }
-
+  console.log("items are ", items)
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
 

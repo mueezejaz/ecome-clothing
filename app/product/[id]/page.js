@@ -20,25 +20,51 @@ export default function ProductPage({ params }) {
   const [relatedProducts, setRelatedProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedSize, setSelectedSize] = useState("")
+  const [selectedColor, setSelectedColor] = useState("")
   const [selectedVariant, setSelectedVariant] = useState(null)
   const [selectedImage, setSelectedImage] = useState(0)
   const [quantity, setQuantity] = useState(1)
   const [addingToCart, setAddingToCart] = useState(false)
   const paramss = use(params)
   const { addItem, items } = useCart()
+  const [SizeAndColor, setSizeAndColor] = useState({
+    color: [],
+    size: []
+  })
 
   // Fetch product data
+  function getUniqueColorsAndSizes(product) {
+    let sizes = [], colors = [];
+    product.variants.forEach(e => {
+      if (!e.isAvailable) return;
+      if (colors.includes(e.color)) return;
+      colors.push({ color: e.color, colorHex: e.colorHex })
+    });
+    product.variants.forEach(e => {
+      if (!e.isAvailable) return;
+      if (sizes.includes(e.size)) return;
+      sizes.push(e.size)
+    });
+    setSizeAndColor({
+      color: [...colors],
+      size: [...sizes]
+    })
+  }
   useEffect(() => {
     const fetchProduct = async () => {
       try {
         setLoading(true)
         const response = await axiosInstance(`/api/products/${paramss.id}`)
-
+        getUniqueColorsAndSizes(response.data.data);
         setProduct(response.data.data)
         console.log(response)
         // Initialize with first variant
         if (response.data?.data?.variants && response.data?.data?.variants.length > 0) {
           setSelectedVariant(response.data.data.variants[0])
+          setSelectedColor(response.data.data.variants[0].color)
+          setSelectedSize(response.data.data.variants[0].size)
+        }else{
+          throw new Error("some thing went wrong report the issue")
         }
       } catch (error) {
         let errorMessage = error.response?.data?.message || "faild to get product";
@@ -62,7 +88,11 @@ export default function ProductPage({ params }) {
 
       try {
         const response = await axiosInstance(`/api/products/related/${product._id}`)
-        setRelatedProducts(response.data.data || [])
+        if(response.data?.data){
+          setRelatedProducts(response.data.data || [])
+        }else{
+          throw new Error("faild to get related report this problem");
+        }
       } catch (error) {
         const errorMessage = error.response?.data?.message || "faild to get product";
         console.error('Error fetching related products:', error)
@@ -72,11 +102,22 @@ export default function ProductPage({ params }) {
 
     fetchRelatedProducts()
   }, [product])
-console.log("the cart items are",items);
+  console.log("the cart items are", items);
   // Reset selected image when variant changes
   useEffect(() => {
     setSelectedImage(0)
   }, [selectedVariant])
+
+  useEffect(() => {
+    if (product && selectedColor && selectedSize) {
+      const variant = product?.variants.find(
+        e => e.size === selectedSize && e.color === selectedColor
+      );
+      if (variant) {
+        setSelectedVariant(variant)
+      }
+    }
+  }, [selectedColor, selectedSize]);
 
   if (loading) {
     return (
@@ -229,7 +270,6 @@ console.log("the cart items are",items);
     if (product.mainImage?.imageUrl) {
       images.push(product.mainImage.imageUrl)
     }
-    console.log("current count is ", count, "and the product is ", product, "and the varient is ", selectedVariant)
     // Add variant images
     if (selectedVariant?.images && selectedVariant.images.length > 0) {
       selectedVariant.images.forEach(img => {
@@ -248,15 +288,6 @@ console.log("the cart items are",items);
 
   const currentImages = getCurrentImages()
 
-  // Get available sizes for selected variant
-  const getAvailableSizes = () => {
-    if (selectedVariant?.size) {
-      return Array.isArray(selectedVariant.size) ? selectedVariant.size : [selectedVariant.size]
-    }
-    return []
-  }
-
-  const availableSizes = getAvailableSizes()
 
   // Calculate sale percentage
   const getSalePercentage = () => {
@@ -280,13 +311,17 @@ console.log("the cart items are",items);
   ]
 
   const handleAddToCart = async () => {
-    if (!selectedVariant) {
+    if (!selectedColor) {
       toast.error("Please select a color")
       return
     }
     if (!selectedSize) {
       toast.error("Please select a size")
       return
+    }
+    if(selectedColor != selectedVariant.color && selectedSize != selectedVariant.size){
+      toast.error("some thing went wrong pls reload the page");
+      return;
     }
     if (quantity > selectedVariant.quantity) {
       toast.error(`Only ${selectedVariant.quantity} items available`)
@@ -307,12 +342,32 @@ console.log("the cart items are",items);
     }
   }
 
-  const handleVariantChange = (variant) => {
-    setSelectedVariant(variant)
-    // Reset size selection if current size is not available in new variant
-    if (selectedSize && !variant.size?.includes(selectedSize)) {
-      setSelectedSize("")
+
+  const handleColorChange = (color) => {
+    const filtervariant = product.variants.filter(e => e.color === color.color);
+    const isSizeAvailable = filtervariant.find(e => e.size === selectedSize);
+
+    if (!isSizeAvailable) {
+      const availableSizes = filtervariant.map(e => e.size).join(", ");
+      toast.error(
+        `${color.color} is not available in size ${selectedSize}. Available sizes: ${availableSizes}`
+      );
+      setSelectedSize(filtervariant[0].size);
     }
+    setSelectedColor(color.color)
+  }
+
+  function handleSizeChane(size) {
+    const filtervariant = product.variants.filter(e => e.color === selectedColor);
+    const isSizeAvailable = filtervariant.find(e => e.size === size);
+    if (!isSizeAvailable) {
+      const availableSizes = filtervariant.map(e => e.size).join(", ");
+      toast.error(
+        `${selectedColor} is not available in size ${size}. Available sizes: ${availableSizes}`
+      );
+      return;
+    }
+    setSelectedSize(size);
   }
 
   const handleWishlist = () => {
@@ -451,25 +506,25 @@ console.log("the cart items are",items);
                 Color {selectedVariant && <span className="font-normal text-gray-600">- {selectedVariant.color}</span>}
               </h3>
               <div className="flex space-x-3">
-                {product.variants?.map((variant) => (
+                {SizeAndColor.color.map((color) => (
                   <motion.button
-                    key={variant.color}
+                    key={color.color}
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
-                    onClick={() => handleVariantChange(variant)}
-                    className={`relative w-10 h-10 rounded-full border-2 transition-all ${selectedVariant?.color === variant.color ? "border-gray-900 scale-110" : "border-gray-300"
+                    onClick={() => handleColorChange(color)}
+                    className={`relative w-10 h-10 rounded-full border-2 transition-all ${selectedColor === color.color ? "border-gray-900 scale-110" : "border-gray-300"
                       }`}
-                    style={{ backgroundColor: variant.colorHex || '#000' }}
-                    title={variant.color}
+                    style={{ backgroundColor: color.colorHex || '#000' }}
+                    title={color.color}
                   >
-                    {selectedVariant?.color === variant.color && (
+                    {selectedColor === color.color && (
                       <div className="absolute inset-0 rounded-full border-2 border-white" />
                     )}
-                    {!variant.isAvailable && (
+                    {/* {!variant.isAvailable && (
                       <div className="absolute inset-0 bg-gray-500/50 rounded-full flex items-center justify-center">
                         <div className="w-6 h-0.5 bg-white transform rotate-45" />
                       </div>
-                    )}
+                    )} */}
                   </motion.button>
                 ))}
               </div>
@@ -477,18 +532,14 @@ console.log("the cart items are",items);
 
             {/* Size Selection */}
             <div>
-              <h3 className="font-semibold text-gray-900 mb-3">
-                Size {selectedSize && <span className="font-normal text-gray-600">- {selectedSize}</span>}
-              </h3>
               <div className="grid grid-cols-6 gap-2">
-                {availableSizes.map((size) => (
+                {SizeAndColor.size.map((size) => (
                   <motion.button
                     key={size}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => {
-                      setSelectedSize(size)
-                      toast.info(`Selected size ${size}`)
+                      handleSizeChane(size)
                     }}
                     className={`py-2 px-3 border rounded-md text-sm font-medium transition-all ${selectedSize === size
                       ? "border-gray-900 bg-gray-900 text-white"
