@@ -53,7 +53,7 @@ const initialFormData = {
   material: "",
   weight: "",
   isActive: true,
-  // featured: false, // Assuming these are not in current Product model based on schema
+  featured: false, 
   // sale: false,     // Assuming these are not in current Product model
   variants: [],
 };
@@ -81,6 +81,7 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
           material: product.material || "",
           weight: product.weight?.toString() || "",
           isActive: product.isActive !== undefined ? product.isActive : true,
+          featured: product.featured || false,
           variants: product.variants?.map(v => ({
             ...v,
             size: v.size || "",
@@ -698,6 +699,18 @@ export default function ProductModal({ isOpen, onClose, product, onProductSaved 
                                 id={`isActive-${product?._id}`}
                                 checked={formData.isActive}
                                 onCheckedChange={(checked) => handleInputChange("isActive", checked)}
+                              // disabled state is inherited from fieldset
+                              />
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label htmlFor={`feature-${product?._id}`}>feature Product</Label>
+                                <p className="text-sm text-gray-600">Product is featured on website front page</p>
+                              </div>
+                              <Switch
+                                id={`feature-${product?._id}`}
+                                checked={formData.featured}
+                                onCheckedChange={(checked) => handleInputChange("featured", checked)}
                               // disabled state is inherited from fieldset
                               />
                             </div>
