@@ -13,8 +13,21 @@ export default function ProductCard({ product }) {
   const handleAddToCart = (e) => {
     e.preventDefault()
     e.stopPropagation()
-    addItem(product)
+    // Add with first variant and first size as default
+    const defaultVariant = product.variants?.[0]
+    const defaultSize = defaultVariant?.size?.[0]
+    addItem(product, defaultVariant, defaultSize, 1)
   }
+
+  // Calculate sale percentage
+  const getSalePercentage = () => {
+    if (product.OriginalPrice && product.price && product.OriginalPrice > product.price) {
+      return Math.round(((product.OriginalPrice - product.price) / product.OriginalPrice) * 100)
+    }
+    return 0
+  }
+
+  const salePercentage = getSalePercentage()
 
   return (
     <Link href={`/product/${product.id}`}>
@@ -24,13 +37,17 @@ export default function ProductCard({ product }) {
       >
         <div className="relative overflow-hidden">
           <motion.img
-            src={product.image}
+            src={product.mainImageUrl || product.image}
             alt={product.name}
             className="w-full h-80 object-cover group-hover:scale-105 transition-transform duration-500"
             whileHover={{ scale: 1.05 }}
           />
 
-          {product.sale && <Badge className="absolute top-4 left-4 bg-red-500 text-white">Sale</Badge>}
+          {(product.sale || salePercentage > 0) && (
+            <Badge className="absolute top-4 left-4 bg-red-500 text-white">
+              {salePercentage > 0 ? `-${salePercentage}%` : "Sale"}
+            </Badge>
+          )}
 
           <motion.button
             initial={{ opacity: 0 }}
@@ -63,14 +80,30 @@ export default function ProductCard({ product }) {
           <p className="text-gray-600 text-sm mb-3">{product.category}</p>
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              {product.originalPrice && (
-                <span className="text-gray-400 line-through text-sm">${product.originalPrice}</span>
+              {product.OriginalPrice && product.OriginalPrice !== (product.discountPrice || product.price) && (
+                <span className="text-gray-400 line-through text-sm">${product.OriginalPrice}</span>
               )}
-              <span className="text-xl font-bold text-gray-900">${product.price}</span>
+              <span className="text-xl font-bold text-gray-900">${product.discountPrice || product.price}</span>
             </div>
+            {product.variants && product.variants.length > 1 && (
+              <div className="flex space-x-1">
+                {product.variants.slice(0, 3).map((variant, index) => (
+                  <div
+                    key={index}
+                    className="w-4 h-4 rounded-full border border-gray-300"
+                    style={{ backgroundColor: variant.colorHex }}
+                    title={variant.color}
+                  />
+                ))}
+                {product.variants.length > 3 && (
+                  <span className="text-xs text-gray-500">+{product.variants.length - 3}</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </motion.div>
     </Link>
   )
 }
+
