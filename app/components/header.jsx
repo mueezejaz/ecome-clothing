@@ -14,7 +14,10 @@ export default function Header() {
   const [isCartOpen, setIsCartOpen] = useState(false)
   const { items } = useCart()
 
-  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
+  const totalItems = items.reduce((sum, item) => {
+    const itemTotal = item.variants.reduce((acc, variant) => acc + variant.quantity, 0);
+    return sum + itemTotal;
+  }, 0);
 
   const navItems = [
     { name: "Women", href: "#women" },

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, use } from "react"
+import { useState, useMemo, useEffect, use } from "react"
 import { motion } from "framer-motion"
 import { Filter, X, Grid, List, SlidersHorizontal } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -14,25 +14,37 @@ import { Separator } from "@/components/ui/separator"
 import Header from "@/app/components/header"
 import Footer from "@/app/components/footer"
 import { ProductCard } from "@/app/components/product-card"
-import { products } from "@/app/data/products"
 import { notFound } from "next/navigation"
-
+import ProductCardSkeleton from "@/app/components/ProductCardSkeleton" // For loading state
+import Link from "next/link"
+import axiosInstance from "@/app/config/axios"
+import { toast } from "sonner"
 const VALID_CATEGORIES = ["women", "men", "children"]
 
 export default function CategoryPage({ params }) {
-    const resolvedParams = use(params);
-    const categoryName = resolvedParams.category.toLowerCase()   
-    if (!VALID_CATEGORIES.includes(categoryName)) {
-        notFound()
+    const resolvedParams = use(params)
+    const categoryName = resolvedParams.category ? resolvedParams.category.toLowerCase() : "";
+
+    if (!VALID_CATEGORIES.includes(categoryName) && categoryName !== "") {
+        notFound();
     }
 
+    const [productsOnPage, setProductsOnPage] = useState([])
+    const [filterOptions, setFilterOptions] = useState({
+        maxPrice: 500, // Initial default
+    });
+    const [isLoading, setIsLoading] = useState(true);
+    const [isUpdating, setIsUpdating] = useState(false); // For filter changes after initial load
+    const [fetchError, setFetchError] = useState(null);
+
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(0);
+    const [totalProducts, setTotalProducts] = useState(0);
+    const itemsPerPage = 12; // Or get from API if configurable
+
     const [filters, setFilters] = useState({
-        priceRange: [0, 500],
+        priceRange: [0, 300], // Default, will update based on fetched filterOptions
         onSale: false,
-        inStock: false,
-        colors: [],
-        sizes: [],
-        materials: [],
         featured: false,
     })
 
@@ -40,145 +52,147 @@ export default function CategoryPage({ params }) {
     const [viewMode, setViewMode] = useState("grid")
     const [isFilterOpen, setIsFilterOpen] = useState(false)
 
-    // Get category products
-    const categoryProducts = products.filter((product) => product.category.toLowerCase() === categoryName)
 
-    // Get all available filter options
-    const filterOptions = useMemo(() => {
-        const colors = new Set()
-        const sizes = new Set()
-        const materials = new Set()
-        let maxPrice = 0
+    // Fetch initial filter options (colors, sizes, materials, maxPrice)
+    // useEffect(() => {
+    //     if (categoryName && VALID_CATEGORIES.includes(categoryName)) {
+    //         const fetchFilterOptions = async () => {
+    //             try {
+    //                 // Fetch all products for the category *without* pagination/filters
+    //                 // to determine all available options.
+    //                 // NOTE: This can be inefficient for very large categories.
+    //                 // A better approach for large datasets is a dedicated API endpoint 
+    //                 // that returns distinct filter values.
+    //                 const response = await fetch(`/api/category/${categoryName}?limit=10000`); // Fetch a large number
+    //                 if (!response.ok) throw new Error('Failed to fetch initial product data for filters');
+    //                 const data = await response.json();
+    //                 const allCategoryProducts = data.data || [];
 
-        categoryProducts.forEach((product) => {
-            // Price
-            const price = product.discountPrice || product.price
-            if (price > maxPrice) maxPrice = price
+    //                 // const colors = new Set(); // Removed
+    //                 // const sizes = new Set(); // Removed
+    //                 // const materials = new Set(); // Removed
+    //                 let maxPrice = 0;
 
-            // Colors from variants
-            product.variants?.forEach((variant) => {
-                if (variant.color) colors.add(variant.color)
-                variant.size?.forEach((size) => sizes.add(size))
-            })
+    //                 allCategoryProducts.forEach((product) => {
+    //                     const price = product.discountPrice || product.price;
+    //                     if (price > maxPrice) maxPrice = price + 10;
+    //                     // product.variants?.forEach((variant) => { // Removed
+    //                     //     if (variant.color) colors.add(variant.color); // Removed
+    //                     //     variant.size?.forEach((s) => sizes.add(s)); // Removed
+    //                     // }); // Removed
+    //                     // if (product.material) materials.add(product.material); // Removed
+    //                 });
 
-            // Materials
-            if (product.material) materials.add(product.material)
-        })
+    //                 const calculatedMaxPrice = Math.ceil(maxPrice) || 500;
+    //                 setFilterOptions({
+    //                     // colors: Array.from(colors).sort(), // Removed
+    //                     // sizes: Array.from(sizes).sort(), // Removed
+    //                     // materials: Array.from(materials).sort(), // Removed
+    //                     maxPrice: calculatedMaxPrice,
+    //                 });
+    //                 // Set initial price range filter based on actual max price
+    //                 setFilters(prev => ({ ...prev, priceRange: [0, calculatedMaxPrice] }));
+    //             } catch (error) {
+    //                 console.error("Error fetching filter options:", error);
+    //                 // Keep default filter options or handle error appropriately
+    //             }
+    //         };
+    //         fetchFilterOptions();
+    //     }
+    // }, [categoryName]);
 
-        return {
-            colors: Array.from(colors).sort(),
-            sizes: Array.from(sizes).sort(),
-            materials: Array.from(materials).sort(),
-            maxPrice: Math.ceil(maxPrice),
+
+    // Fetch products based on category, filters, sorting, and pagination
+    useEffect(() => {
+        if (categoryName && VALID_CATEGORIES.includes(categoryName)) {
+            const fetchProducts = async () => {
+                if (currentPage === 1 && !isUpdating) setIsLoading(true); else setIsUpdating(true);
+                setFetchError(null);
+
+                const params = new URLSearchParams({
+                    page: currentPage,
+                    limit: itemsPerPage,
+                    sortBy: sortBy,
+                    priceMin: filters.priceRange[0],
+                    priceMax: filters.priceRange[1],
+                });
+
+                if (filters.onSale) params.append('onSale', 'true');
+                if (filters.featured) params.append('featured', 'true');
+
+                try {
+                    const response = await axiosInstance(`/api/category/${categoryName}?${params.toString()}`);
+                    if (!response.data?.data) {
+                        toast.error(`Failed to fetch products for ${categoryName}`)
+                        throw new Error(`Failed to fetch products for ${categoryName}`);
+                    }
+                    setProductsOnPage(response.data?.data || []);
+                    setTotalPages(response.data?.totalPages || 0);
+                    setTotalProducts(response.data?.totalProducts || 0);
+                } catch (error) {
+                    const errorMessage = error.response?.data?.message || error.message || "An unexpected error occurred.";
+                    console.error("Error fetching products:", error);
+                    toast.error(errorMessage);
+                    setFetchError(errorMessage);
+                    setProductsOnPage([]);
+                    setTotalPages(0);
+                    setTotalProducts(0);
+                } finally {
+                    setIsLoading(false);
+                    setIsUpdating(false);
+                }
+            };
+            fetchProducts();
+        } else if (categoryName !== "") {
+            setIsLoading(false);
+            setIsUpdating(false);
         }
-    }, [categoryProducts])
+    }, [categoryName, filters, sortBy, currentPage, itemsPerPage]);
 
-    // Apply filters
-    const filteredProducts = useMemo(() => {
-        return categoryProducts.filter((product) => {
-            const price = product.discountPrice || product.price
-
-            // Price filter
-            if (price < filters.priceRange[0] || price > filters.priceRange[1]) {
-                return false
-            }
-
-            // Sale filter
-            if (filters.onSale && !product.sale && !product.discountPrice) {
-                return false
-            }
-
-            // Stock filter
-            if (filters.inStock) {
-                const totalStock = product.variants?.reduce((sum, variant) => sum + (variant.quantity || 0), 0) || 0
-                if (totalStock === 0) return false
-            }
-
-            // Featured filter
-            if (filters.featured && !product.featured) {
-                return false
-            }
-
-            // Color filter
-            if (filters.colors.length > 0) {
-                const productColors = product.variants?.map((v) => v.color) || []
-                if (!filters.colors.some((color) => productColors.includes(color))) {
-                    return false
-                }
-            }
-
-            // Size filter
-            if (filters.sizes.length > 0) {
-                const productSizes = product.variants?.flatMap((v) => v.size || []) || []
-                if (!filters.sizes.some((size) => productSizes.includes(size))) {
-                    return false
-                }
-            }
-
-            // Material filter
-            if (filters.materials.length > 0) {
-                if (!filters.materials.includes(product.material)) {
-                    return false
-                }
-            }
-
-            return true
-        })
-    }, [categoryProducts, filters])
-
-    // Sort products
-    const sortedProducts = useMemo(() => {
-        const sorted = [...filteredProducts]
-
-        switch (sortBy) {
-            case "price-low":
-                return sorted.sort((a, b) => (a.discountPrice || a.price) - (b.discountPrice || b.price))
-            case "price-high":
-                return sorted.sort((a, b) => (b.discountPrice || b.price) - (a.discountPrice || a.price))
-            case "name":
-                return sorted.sort((a, b) => a.name.localeCompare(b.name))
-            case "newest":
-                return sorted.reverse()
-            case "featured":
-            default:
-                return sorted.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0))
-        }
-    }, [filteredProducts, sortBy])
+    // No client-side filtering or sorting needed anymore as server handles it.
+    // const filteredProducts = useMemo(...); -> REMOVE
+    // const sortedProducts = useMemo(...); -> REMOVE
+    // `productsOnPage` is now the source of truth for display.
 
     // Filter handlers
     const handleFilterChange = (key, value) => {
-        setFilters((prev) => ({ ...prev, [key]: value }))
+        const newFilters = { ...filters, [key]: value };
+        setCurrentPage(1); // Reset to page 1 on filter change
+        setFilters(newFilters);
     }
 
     const handleArrayFilterToggle = (key, value) => {
-        setFilters((prev) => ({
-            ...prev,
-            [key]: prev[key].includes(value) ? prev[key].filter((item) => item !== value) : [...prev[key], value],
-        }))
+        const currentArray = filters[key];
+        const newArray = currentArray.includes(value)
+            ? currentArray.filter((item) => item !== value)
+            : [...currentArray, value];
+        const newFilters = { ...filters, [key]: newArray };
+        setCurrentPage(1); // Reset to page 1 on filter change
+        setFilters(newFilters);
     }
 
     const clearFilters = () => {
         setFilters({
-            priceRange: [0, filterOptions.maxPrice],
+            priceRange: [0, filterOptions.maxPrice], // Reset price range to full
             onSale: false,
-            inStock: false,
-            colors: [],
-            sizes: [],
-            materials: [],
+            // colors: [], // Removed
+            // sizes: [], // Removed
+            // materials: [], // Removed
             featured: false,
-        })
+        });
+        setCurrentPage(1); // Reset page
     }
 
     const getActiveFiltersCount = () => {
-        let count = 0
-        if (filters.onSale) count++
-        if (filters.inStock) count++
-        if (filters.featured) count++
-        if (filters.colors.length > 0) count++
-        if (filters.sizes.length > 0) count++
-        if (filters.materials.length > 0) count++
-        if (filters.priceRange[0] > 0 || filters.priceRange[1] < filterOptions.maxPrice) count++
-        return count
+        let count = 0;
+        if (filters.onSale) count++;
+        if (filters.featured) count++;
+        // Removed counts for colors, sizes, materials
+        if (filterOptions.maxPrice > 0 && //Ensure maxPrice is loaded
+            (filters.priceRange[0] > 0 || filters.priceRange[1] < filterOptions.maxPrice)) {
+            count++;
+        }
+        return count;
     }
 
     // Filter component
@@ -220,16 +234,6 @@ export default function CategoryPage({ params }) {
                     </div>
                     <div className="flex items-center space-x-2">
                         <Checkbox
-                            id="inStock"
-                            checked={filters.inStock}
-                            onCheckedChange={(checked) => handleFilterChange("inStock", checked)}
-                        />
-                        <label htmlFor="inStock" className="text-sm text-gray-700">
-                            In Stock
-                        </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                        <Checkbox
                             id="featured"
                             checked={filters.featured}
                             onCheckedChange={(checked) => handleFilterChange("featured", checked)}
@@ -243,81 +247,8 @@ export default function CategoryPage({ params }) {
 
             <Separator />
 
-            {/* Colors */}
-            {filterOptions.colors.length > 0 && (
-                <>
-                    <div>
-                        <h3 className="font-semibold text-gray-900 mb-3">Colors</h3>
-                        <div className="grid grid-cols-2 gap-2">
-                            {filterOptions.colors.map((color) => {
-                                const variant = categoryProducts.flatMap((p) => p.variants || []).find((v) => v.color === color)
-                                return (
-                                    <div key={color} className="flex items-center space-x-2">
-                                        <Checkbox
-                                            id={`color-${color}`}
-                                            checked={filters.colors.includes(color)}
-                                            onCheckedChange={() => handleArrayFilterToggle("colors", color)}
-                                        />
-                                        <label htmlFor={`color-${color}`} className="flex items-center space-x-2 text-sm">
-                                            <div
-                                                className="w-4 h-4 rounded-full border border-gray-300"
-                                                style={{ backgroundColor: variant?.colorHex || "#000" }}
-                                            />
-                                            <span>{color}</span>
-                                        </label>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    </div>
-                    <Separator />
-                </>
-            )}
-
-            {/* Sizes */}
-            {filterOptions.sizes.length > 0 && (
-                <>
-                    <div>
-                        <h3 className="font-semibold text-gray-900 mb-3">Sizes</h3>
-                        <div className="grid grid-cols-3 gap-2">
-                            {filterOptions.sizes.map((size) => (
-                                <div key={size} className="flex items-center space-x-2">
-                                    <Checkbox
-                                        id={`size-${size}`}
-                                        checked={filters.sizes.includes(size)}
-                                        onCheckedChange={() => handleArrayFilterToggle("sizes", size)}
-                                    />
-                                    <label htmlFor={`size-${size}`} className="text-sm">
-                                        {size}
-                                    </label>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    <Separator />
-                </>
-            )}
-
-            {/* Materials */}
-            {filterOptions.materials.length > 0 && (
-                <div>
-                    <h3 className="font-semibold text-gray-900 mb-3">Materials</h3>
-                    <div className="space-y-2">
-                        {filterOptions.materials.map((material) => (
-                            <div key={material} className="flex items-center space-x-2">
-                                <Checkbox
-                                    id={`material-${material}`}
-                                    checked={filters.materials.includes(material)}
-                                    onCheckedChange={() => handleArrayFilterToggle("materials", material)}
-                                />
-                                <label htmlFor={`material-${material}`} className="text-sm">
-                                    {material}
-                                </label>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+            {/* Colors, Sizes, Materials sections are removed */}
+            {/* The empty space will naturally be handled by flex layout or lack of these elements */}
         </div>
     )
 
@@ -410,13 +341,15 @@ export default function CategoryPage({ params }) {
                                 </Sheet>
 
                                 <div className="text-sm text-gray-600">
-                                    {sortedProducts.length} of {categoryProducts.length} products
+                                    {(isLoading || isUpdating)
+                                        ? "Loading..."
+                                        : `${productsOnPage.length > 0 ? ((currentPage - 1) * itemsPerPage + 1) + '-' + Math.min(currentPage * itemsPerPage, totalProducts) : 0} of ${totalProducts} products`}
                                 </div>
                             </div>
 
                             <div className="flex items-center space-x-4">
                                 {/* Sort */}
-                                <Select value={sortBy} onValueChange={setSortBy}>
+                                <Select value={sortBy} onValueChange={(value) => { setCurrentPage(1); setSortBy(value); }}>
                                     <SelectTrigger className="w-48">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -476,28 +409,10 @@ export default function CategoryPage({ params }) {
                                         <X className="w-3 h-3 cursor-pointer" onClick={() => handleFilterChange("featured", false)} />
                                     </Badge>
                                 )}
-                                {filters.colors.map((color) => (
-                                    <Badge key={color} variant="secondary" className="flex items-center gap-1">
-                                        {color}
-                                        <X className="w-3 h-3 cursor-pointer" onClick={() => handleArrayFilterToggle("colors", color)} />
-                                    </Badge>
-                                ))}
-                                {filters.sizes.map((size) => (
-                                    <Badge key={size} variant="secondary" className="flex items-center gap-1">
-                                        Size {size}
-                                        <X className="w-3 h-3 cursor-pointer" onClick={() => handleArrayFilterToggle("sizes", size)} />
-                                    </Badge>
-                                ))}
-                                {filters.materials.map((material) => (
-                                    <Badge key={material} variant="secondary" className="flex items-center gap-1">
-                                        {material}
-                                        <X
-                                            className="w-3 h-3 cursor-pointer"
-                                            onClick={() => handleArrayFilterToggle("materials", material)}
-                                        />
-                                    </Badge>
-                                ))}
-                                {(filters.priceRange[0] > 0 || filters.priceRange[1] < filterOptions.maxPrice) && (
+                                {/* Removed map for filters.colors */}
+                                {/* Removed map for filters.sizes */}
+                                {/* Removed map for filters.materials */}
+                                {filterOptions.maxPrice > 0 && (filters.priceRange[0] > 0 || filters.priceRange[1] < filterOptions.maxPrice) && (
                                     <Badge variant="secondary" className="flex items-center gap-1">
                                         ${filters.priceRange[0]} - ${filters.priceRange[1]}
                                         <X
@@ -511,16 +426,34 @@ export default function CategoryPage({ params }) {
 
                         {/* Products Grid */}
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
-                            {sortedProducts.length === 0 ? (
+                            {(isLoading || (isUpdating && productsOnPage.length === 0)) && ( // Show skeleton if initial load or updating and no products yet
+                                        <ProductCardSkeleton/>
+                            )}
+                            {!isLoading && !isUpdating && fetchError && (
+                                <div className="text-center py-16 text-red-500">
+                                    <X className="w-16 h-16 mx-auto mb-4" />
+                                    <h3 className="text-xl font-semibold mb-2">Error loading products</h3>
+                                    <p>{fetchError}</p>
+                                    <Button onClick={() => { /* Implement refetch or clear error */ }} className="mt-4">
+                                        Try Again
+                                    </Button>
+                                </div>
+                            )}
+                            {!isLoading && !isUpdating && !fetchError && productsOnPage.length === 0 && (
                                 <div className="text-center py-16">
                                     <div className="text-gray-400 mb-4">
                                         <Filter className="w-16 h-16 mx-auto" />
                                     </div>
                                     <h3 className="text-xl font-semibold text-gray-900 mb-2">No products found</h3>
-                                    <p className="text-gray-600 mb-4">Try adjusting your filters to see more products</p>
-                                    <Button onClick={clearFilters}>Clear All Filters</Button>
+                                    <p className="text-gray-600 mb-4">
+                                        Try adjusting your filters or check back later.
+                                    </p>
+                                    {getActiveFiltersCount() > 0 && (
+                                        <Button onClick={clearFilters}>Clear All Filters</Button>
+                                    )}
                                 </div>
-                            ) : (
+                            )}
+                            {(!isUpdating || productsOnPage.length > 0) && !fetchError && productsOnPage.length > 0 && ( // Show products if not updating or if updating but products exist
                                 <div
                                     className={
                                         viewMode === "grid"
@@ -528,9 +461,9 @@ export default function CategoryPage({ params }) {
                                             : "space-y-6"
                                     }
                                 >
-                                    {sortedProducts.map((product, index) => (
+                                    {productsOnPage.map((product, index) => (
                                         <motion.div
-                                            key={product.id}
+                                            key={product._id || product.id}
                                             initial={{ opacity: 0, y: 20 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             transition={{ delay: index * 0.05 }}
@@ -541,6 +474,31 @@ export default function CategoryPage({ params }) {
                                 </div>
                             )}
                         </motion.div>
+
+                        {/* Pagination Controls */}
+                        {!isLoading && !fetchError && totalPages > 1 && (
+                            <motion.div
+                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
+                                className="flex justify-center items-center space-x-4 mt-12 py-4">
+                                <Button
+                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                    disabled={currentPage === 1 || isUpdating}
+                                    variant="outline"
+                                >
+                                    Previous
+                                </Button>
+                                <span className="text-sm text-gray-700">
+                                    Page {currentPage} of {totalPages}
+                                </span>
+                                <Button
+                                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                    disabled={currentPage === totalPages || isUpdating}
+                                    variant="outline"
+                                >
+                                    Next
+                                </Button>
+                            </motion.div>
+                        )}
                     </div>
                 </div>
             </main>
@@ -553,8 +511,8 @@ export default function CategoryPage({ params }) {
 // List view component
 function ProductListItem({ product }) {
     const getSalePercentage = () => {
-        if (product.OriginalPrice && product.price && product.OriginalPrice > product.price) {
-            return Math.round(((product.OriginalPrice - product.price) / product.OriginalPrice) * 100)
+        if (product.discountPrice && product.price && product.price > product.discountPrice) {
+            return Math.round(((product.price - product.discountPrice) / product.price) * 100)
         }
         return 0
     }
@@ -562,56 +520,59 @@ function ProductListItem({ product }) {
     const salePercentage = getSalePercentage()
 
     return (
-        <Card className="overflow-hidden hover:shadow-lg transition-shadow">
-            <CardContent className="p-0">
-                <div className="flex">
-                    <div className="relative w-48 h-48 flex-shrink-0">
-                        <img
-                            src={product.mainImageUrl || product.image}
-                            alt={product.name}
-                            className="w-full h-full object-cover"
-                        />
-                        {(product.sale || salePercentage > 0) && (
-                            <Badge className="absolute top-2 left-2 bg-red-500 text-white">
-                                {salePercentage > 0 ? `-${salePercentage}%` : "Sale"}
-                            </Badge>
-                        )}
-                    </div>
-                    <div className="flex-1 p-6">
-                        <div className="flex justify-between items-start mb-2">
-                            <h3 className="text-lg font-semibold text-gray-900">{product.name}</h3>
-                            <div className="text-right">
-                                <div className="flex items-center space-x-2">
-                                    {product.OriginalPrice && product.OriginalPrice !== (product.discountPrice || product.price) && (
-                                        <span className="text-gray-400 line-through">${product.OriginalPrice}</span>
+        <Link href={`/product/${product._id}`}>
+            <Card className="overflow-hidden hover:shadow-lg transition-shadow">
+                <CardContent className="p-0">
+                    <div className="flex">
+                        <div className="relative w-48 h-48 flex-shrink-0">
+                            <img
+                                src={product.mainImage.imageUrl}
+                                alt={product.name}
+                                className="w-full h-full object-cover"
+                            />
+                            {(product.sale || salePercentage > 0) && (
+                                <Badge className="absolute top-2 left-2 bg-red-500 text-white">
+                                    {salePercentage > 0 ? `-${salePercentage}%` : "Sale"}
+                                </Badge>
+                            )}
+                        </div>
+                        <div className="flex-1 p-6">
+                            <div className="flex justify-between items-start mb-2">
+                                <h3 className="text-lg font-semibold text-gray-900">{product.name}</h3>
+                                <div className="text-right">
+                                    <div className="flex items-center space-x-2">
+                                        {product.OriginalPrice && product.OriginalPrice !== (product.discountPrice || product.price) && (
+                                            <span className="text-gray-400 line-through">${product.OriginalPrice}</span>
+                                        )}
+                                        <span className="text-xl font-bold text-gray-900">${product.discountPrice || product.price}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <p className="text-gray-600 mb-4 line-clamp-2">{product.description}</p>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-4">
+                                    <Badge variant="outline">{product.category}</Badge>
+                                    {product.featured && <Badge variant="secondary">Featured</Badge>}
+                                    {product.variants && product.variants.length > 1 && (
+                                        <div className="flex space-x-1">
+                                            {product.variants.slice(0, 4).map((variant, index) => (
+                                                <div
+                                                    key={index}
+                                                    className="w-4 h-4 rounded-full border border-gray-300"
+                                                    style={{ backgroundColor: variant.colorHex }}
+                                                    title={variant.color}
+                                                />
+                                            ))}
+                                        </div>
                                     )}
-                                    <span className="text-xl font-bold text-gray-900">${product.discountPrice || product.price}</span>
                                 </div>
                             </div>
                         </div>
-                        <p className="text-gray-600 mb-4 line-clamp-2">{product.description}</p>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-4">
-                                <Badge variant="outline">{product.category}</Badge>
-                                {product.featured && <Badge variant="secondary">Featured</Badge>}
-                                {product.variants && product.variants.length > 1 && (
-                                    <div className="flex space-x-1">
-                                        {product.variants.slice(0, 4).map((variant, index) => (
-                                            <div
-                                                key={index}
-                                                className="w-4 h-4 rounded-full border border-gray-300"
-                                                style={{ backgroundColor: variant.colorHex }}
-                                                title={variant.color}
-                                            />
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                            <Button>View Details</Button>
-                        </div>
                     </div>
-                </div>
-            </CardContent>
-        </Card>
+                </CardContent>
+            </Card>
+        </Link>
     )
 }
+
+
